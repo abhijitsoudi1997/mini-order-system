@@ -5,10 +5,15 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
 public class ProductService {
+	
+	private static final Logger log = LoggerFactory.getLogger(ProductService.class);
+	
 	private final List<Product> products = new ArrayList<>(
 			List.of(new Product(1L, "SKU-1001", "Laptop", "Electronics", 55000, 10),
 					new Product(2L, "SKU-1002", "Mouse", "Electronics", 700, 50),
@@ -22,6 +27,7 @@ public class ProductService {
 		if (category == null) {
 			return products;
 		}
+		log.debug("Fetching all products, category={}", category);
 		return products.stream().filter(p -> p.category().equals(category)).toList();
 
 	}
@@ -36,6 +42,7 @@ public class ProductService {
 		Product saved = new Product(newId, product.sku(), product.name(), product.category(), product.price(),
 				product.quantity());
 		products.add(saved);
+		log.info("Created product with id {}", saved.id());
 		return saved;
 	}
 
@@ -48,7 +55,7 @@ public class ProductService {
 				return Optional.of(updated);
 			}
 		}
-
+		log.warn("Product {} not found", id);
 		return Optional.empty();
 	}
 

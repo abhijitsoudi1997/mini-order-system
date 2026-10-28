@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -17,18 +18,22 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import com.in28minutes.springboot.learn_spring_boot.config.AppProperties;
+
 @RestController
 public class ProductController {
 	
 	private final ProductService service;
+	private final AppProperties properties;
 	
-	public ProductController(ProductService service) {
+	public ProductController(ProductService service, AppProperties properties) {
 		this.service = service;
+		this.properties = properties;
 	}
 	
 	@GetMapping("/hello")
 	public String hello() {
-		return "Hello world";
+		return properties.getWelcomeMessage();
 	}
 	
 	@GetMapping("/products")
