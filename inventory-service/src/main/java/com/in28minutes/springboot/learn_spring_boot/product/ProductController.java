@@ -22,61 +22,57 @@ import com.in28minutes.springboot.learn_spring_boot.config.AppProperties;
 
 @RestController
 public class ProductController {
-	
+
 	private final ProductService service;
 	private final AppProperties properties;
-	
+
 	public ProductController(ProductService service, AppProperties properties) {
 		this.service = service;
 		this.properties = properties;
 	}
-	
+
 	@GetMapping("/hello")
 	public String hello() {
 		return properties.getWelcomeMessage();
 	}
-	
+
 	@GetMapping("/products")
 	public List<Product> getProducts(@RequestParam(required = false) String category) {
 		return service.findAll(category);
 	}
-	
+
 	@GetMapping("/products/{id}")
 	public Product getProductsById(@PathVariable Long id) {
 		Product product = service.findById(id)
-										.orElseThrow(() -> 
-										new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found: " + id));
+				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found: " + id));
 		return product;
-		
+
 	}
-	
-	
+
 	@PostMapping("/products")
-	public ResponseEntity<Product> createProduct(@RequestBody Product product){
-		
+	public ResponseEntity<Product> createProduct(@RequestBody Product product) {
+
 		Product saved = service.createProduct(product);
-		URI location = ServletUriComponentsBuilder.fromCurrentRequest()
-													.path("/{id}")
-													.buildAndExpand(saved.id())
-													.toUri();
-		
+		URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(saved.getId())
+				.toUri();
+
 		return ResponseEntity.created(location).body(saved);
-		
+
 	}
-	
+
 	@PutMapping("/products/{id}")
-	public Product updateProduct(@PathVariable Long id, @RequestBody Product product){
-		
+	public Product updateProduct(@PathVariable Long id, @RequestBody Product product) {
+
 		return service.updateProduct(id, product)
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found: " + id));
 	}
-	
+
 	@DeleteMapping("/products/{id}")
-	public ResponseEntity<Void> deleteProduct(@PathVariable Long id){
-		if(!service.deleteProduct(id)) {
+	public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
+		if (!service.deleteProduct(id)) {
 			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found: " + id);
 		}
-		
+
 		return ResponseEntity.noContent().build();
 	}
 
