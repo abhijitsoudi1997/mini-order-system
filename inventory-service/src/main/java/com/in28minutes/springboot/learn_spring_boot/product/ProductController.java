@@ -44,10 +44,9 @@ public class ProductController {
 	}
 
 	@GetMapping("/products/{id}")
-	public ResponseEntity<ProductResponse> getProductsById(@PathVariable Long id) {
+	public ProductResponse getProductsById(@PathVariable Long id) {
 		return service.findById(id)
-				.map(ResponseEntity::ok)
-				.orElse(ResponseEntity.notFound().build());
+	            .orElseThrow(() -> new ProductNotFoundException(id));
 
 	}
 
@@ -63,20 +62,18 @@ public class ProductController {
 	}
 
 	@PutMapping("/products/{id}")
-	public ResponseEntity<ProductResponse> updateProduct(@PathVariable Long id,
+	public ProductResponse updateProduct(@PathVariable Long id,
 	                                                     @Valid @RequestBody ProductRequest request) {
-	    return service.updateProduct(id, request)
-	            .map(ResponseEntity::ok)
-	            .orElse(ResponseEntity.notFound().build());
+		return service.updateProduct(id, request)
+	            .orElseThrow(() -> new ProductNotFoundException(id));
 	}
 
 	@DeleteMapping("/products/{id}")
 	public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
 		if (!service.deleteProduct(id)) {
-			throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found: " + id);
-		}
-
-		return ResponseEntity.noContent().build();
+	        throw new ProductNotFoundException(id);
+	    }
+	    return ResponseEntity.noContent().build();
 	}
 
 }
