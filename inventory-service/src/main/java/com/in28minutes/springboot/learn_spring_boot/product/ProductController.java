@@ -20,6 +20,8 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.in28minutes.springboot.learn_spring_boot.config.AppProperties;
 
+import jakarta.validation.Valid;
+
 @RestController
 public class ProductController {
 
@@ -50,7 +52,7 @@ public class ProductController {
 	}
 
 	@PostMapping("/products")
-	public ResponseEntity<ProductResponse> createProduct(@RequestBody ProductRequest request) {
+	public ResponseEntity<ProductResponse> createProduct(@Valid @RequestBody ProductRequest request) {
 
 		ProductResponse saved = service.createProduct(request);
 		URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(saved.id())
@@ -62,7 +64,7 @@ public class ProductController {
 
 	@PutMapping("/products/{id}")
 	public ResponseEntity<ProductResponse> updateProduct(@PathVariable Long id,
-	                                                     @RequestBody ProductRequest request) {
+	                                                     @Valid @RequestBody ProductRequest request) {
 	    return service.updateProduct(id, request)
 	            .map(ResponseEntity::ok)
 	            .orElse(ResponseEntity.notFound().build());
