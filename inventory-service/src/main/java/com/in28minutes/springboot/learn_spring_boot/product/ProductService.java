@@ -15,47 +15,50 @@ public class ProductService {
 	private static final Logger log = LoggerFactory.getLogger(ProductService.class);
 	
 	private ProductRepository productRepository;
+	private ProductMapper mapper;
 	
-	public ProductService(ProductRepository productRepository) {
+	public ProductService(ProductRepository productRepository, ProductMapper mapper) {
 		this.productRepository = productRepository;
+		this.mapper = mapper;
 	}
 	
 	
 
-	public List<Product> findAll(String category) {
-		if (category == null) {
-			return productRepository.findAll();
-		}
-		log.debug("Fetching all products, category={}", category);
-		return productRepository.findByCategory(category);
+	public List<ProductResponse> findAll(String category) {
+		List<Product> products = (category == null)
+					? productRepository.findAll()
+					:productRepository.findByCategory(category);
+		
+		return products.stream().map(mapper::toResponse).toList();
 
 	}
 
-	public Optional<Product> findById(Long id) {
-		return productRepository.findById(id);
+	public Optional<ProductResponse> findById(Long id) {
+		return productRepository.findById(id).map(mapper::toResponse);
 	}
 
-	public Product createProduct(Product product) {
-		return productRepository.save(product);
+	public ProductResponse createProduct(ProductRequest request) {
+		Product saved = productRepository.save(mapper.toEntity(request));
+		return mapper.toResponse(saved);
 	}
 
-	public Optional<Product> updateProduct(Long id, Product product) {
+	public Optional<ProductResponse> updateProduct(Long id, ProductRequest request) {
 		return productRepository.findById(id).map(existing -> {
-	        existing.setSku(product.getSku());
-	        existing.setName(product.getName());
-	        existing.setCategory(product.getCategory());
-	        existing.setPrice(product.getPrice());
-	        existing.setQuantity(product.getQuantity());
-	        return productRepository.save(existing);
+	        existing.setSku(request.sku());
+	        existing.setName(request.name());
+	        existing.setCategory(request.category());
+	        existing.setPrice(request.price());
+	        existing.setQuantity(request.quantity());
+	        return mapper.toResponse(productRepository.save(existing));
 	    });
 	}
 
 	public boolean deleteProduct(Long id) {
-		if (productRepository.existsById(id)) {
-			productRepository.deleteById(id);
-	        return true;
+		if (!productRepository.existsById(id)) {
+	        return false;
 	    }
-	    return false;
+		productRepository.deleteById(id);
+	    return true;
 	}
 
 }

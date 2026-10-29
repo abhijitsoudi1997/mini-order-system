@@ -37,23 +37,23 @@ public class ProductController {
 	}
 
 	@GetMapping("/products")
-	public List<Product> getProducts(@RequestParam(required = false) String category) {
+	public List<ProductResponse> getProducts(@RequestParam(required = false) String category) {
 		return service.findAll(category);
 	}
 
 	@GetMapping("/products/{id}")
-	public Product getProductsById(@PathVariable Long id) {
-		Product product = service.findById(id)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found: " + id));
-		return product;
+	public ResponseEntity<ProductResponse> getProductsById(@PathVariable Long id) {
+		return service.findById(id)
+				.map(ResponseEntity::ok)
+				.orElse(ResponseEntity.notFound().build());
 
 	}
 
 	@PostMapping("/products")
-	public ResponseEntity<Product> createProduct(@RequestBody Product product) {
+	public ResponseEntity<ProductResponse> createProduct(@RequestBody ProductRequest request) {
 
-		Product saved = service.createProduct(product);
-		URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(saved.getId())
+		ProductResponse saved = service.createProduct(request);
+		URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(saved.id())
 				.toUri();
 
 		return ResponseEntity.created(location).body(saved);
@@ -61,10 +61,11 @@ public class ProductController {
 	}
 
 	@PutMapping("/products/{id}")
-	public Product updateProduct(@PathVariable Long id, @RequestBody Product product) {
-
-		return service.updateProduct(id, product)
-				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Product not found: " + id));
+	public ResponseEntity<ProductResponse> updateProduct(@PathVariable Long id,
+	                                                     @RequestBody ProductRequest request) {
+	    return service.updateProduct(id, request)
+	            .map(ResponseEntity::ok)
+	            .orElse(ResponseEntity.notFound().build());
 	}
 
 	@DeleteMapping("/products/{id}")
