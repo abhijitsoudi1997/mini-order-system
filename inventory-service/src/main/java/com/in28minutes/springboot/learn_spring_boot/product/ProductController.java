@@ -20,8 +20,12 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import com.in28minutes.springboot.learn_spring_boot.config.AppProperties;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
+@Tag(name = "Products", description = "Manage the product catalogue")
 @RestController
 public class ProductController {
 
@@ -38,11 +42,16 @@ public class ProductController {
 		return properties.getWelcomeMessage();
 	}
 
+	@Operation(summary = "List products, optionally filtered by category")
+	@ApiResponse(responseCode = "200", description = "List of products")
 	@GetMapping("/products")
 	public List<ProductResponse> getProducts(@RequestParam(required = false) String category) {
 		return service.findAll(category);
 	}
 
+	@Operation(summary = "Get one product by id")
+	@ApiResponse(responseCode = "200", description = "Product found")
+	@ApiResponse(responseCode = "404", description = "Product not found")
 	@GetMapping("/products/{id}")
 	public ProductResponse getProductsById(@PathVariable Long id) {
 		return service.findById(id)
@@ -50,6 +59,10 @@ public class ProductController {
 
 	}
 
+	@Operation(summary = "Create a product")
+	@ApiResponse(responseCode = "201", description = "Product created")
+	@ApiResponse(responseCode = "400", description = "Validation failed")
+	@ApiResponse(responseCode = "409", description = "Sku already exists")
 	@PostMapping("/products")
 	public ResponseEntity<ProductResponse> createProduct(@Valid @RequestBody ProductRequest request) {
 
@@ -61,6 +74,10 @@ public class ProductController {
 
 	}
 
+	@Operation(summary = "Update a product")
+	@ApiResponse(responseCode = "200", description = "Product updated")
+	@ApiResponse(responseCode = "400", description = "Validation failed")
+	@ApiResponse(responseCode = "404", description = "Product not found")
 	@PutMapping("/products/{id}")
 	public ProductResponse updateProduct(@PathVariable Long id,
 	                                                     @Valid @RequestBody ProductRequest request) {
@@ -68,6 +85,9 @@ public class ProductController {
 	            .orElseThrow(() -> new ProductNotFoundException(id));
 	}
 
+	@Operation(summary = "Delete a product")
+	@ApiResponse(responseCode = "204", description = "Product deleted")
+	@ApiResponse(responseCode = "404", description = "Product not found")
 	@DeleteMapping("/products/{id}")
 	public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
 		if (!service.deleteProduct(id)) {
