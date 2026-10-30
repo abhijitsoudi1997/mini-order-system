@@ -99,7 +99,7 @@ public class ProductController {
 	            .orElseThrow(() -> new ProductNotFoundException(id));
 	}
 
-	@Operation(summary = "Delete a product")
+	@Operation(summary = "Soft delete a product")
 	@ApiResponse(responseCode = "204", description = "Product deleted")
 	@ApiResponse(responseCode = "404", description = "Product not found")
 	@DeleteMapping("/products/{id}")

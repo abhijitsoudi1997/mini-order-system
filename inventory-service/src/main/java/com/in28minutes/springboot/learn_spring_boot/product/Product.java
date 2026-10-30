@@ -14,23 +14,25 @@ public class Product {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	Long id;
-	
+
 	@Column(unique = true, nullable = false)
 	String sku;
-	
+
 	String name;
-	
+
 	String category;
-	
+
 	@Column(nullable = false, precision = 10, scale = 2)
 	private BigDecimal price;
-	
 
 	int quantity;
-	
+
+	@Column(nullable = false)
+	private boolean active = true;
+
 	public Product() {
 	}
-	
+
 	public Product(String sku, String name, String category, BigDecimal price, int quantity) {
 		super();
 		this.sku = sku;
@@ -87,8 +89,13 @@ public class Product {
 	public void setQuantity(int quantity) {
 		this.quantity = quantity;
 	}
-	
-	
-	
+
+	public boolean isActive() {
+		return active;
+	}
+
+	public void setActive(boolean active) {
+		this.active = active;
+	}
 
 }

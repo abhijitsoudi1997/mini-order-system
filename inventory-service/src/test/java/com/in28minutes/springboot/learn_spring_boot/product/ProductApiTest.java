@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+
+import com.jayway.jsonpath.JsonPath;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -92,5 +95,21 @@ class ProductApiTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Validation failed"))
                 .andExpect(jsonPath("$.details").isNotEmpty());
+    }
+    
+    @Test
+    void deleteProduct_isSoft_andProductDisappearsFromApi() throws Exception {
+        String body = """
+                {"sku":"SKU-TEST-2","name":"Bin","category":"Home","price":99.50,"quantity":3}
+                """;
+        String json = mockMvc.perform(post("/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Number id = JsonPath.read(json, "$.id");
+
+        mockMvc.perform(delete("/products/" + id)).andExpect(status().isNoContent());
+        mockMvc.perform(get("/products/" + id)).andExpect(status().isNotFound());
     }
 }

@@ -39,7 +39,7 @@ public class ProductServiceTest {
     @Test
     void findById_whenExists_returnsResponse() {
         Product laptop = new Product("SKU-1001", "Laptop", "Electronics", BigDecimal.valueOf(55000), 10);
-        when(repository.findById(1L)).thenReturn(Optional.of(laptop));
+        when(repository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(laptop));
 
         Optional<ProductResponse> result = service.findById(1L);
 
@@ -49,7 +49,7 @@ public class ProductServiceTest {
 
     @Test
     void findById_whenMissing_returnsEmpty() {
-        when(repository.findById(99L)).thenReturn(Optional.empty());
+        when(repository.findByIdAndActiveTrue(99L)).thenReturn(Optional.empty());
 
         assertTrue(service.findById(99L).isEmpty());
     }
@@ -58,31 +58,43 @@ public class ProductServiceTest {
     void findAll_withCategory_usesCategoryQuery() {
     	Pageable pageable = PageRequest.of(0, 10);
     	Product desk = new Product("SKU-1003", "Desk", "Furniture", BigDecimal.valueOf(8000), 5);
-        when(repository.findByCategory("Furniture", pageable))
+        when(repository.findByCategoryAndActiveTrue("Furniture", pageable))
                 .thenReturn(new PageImpl<>(List.of(desk), pageable, 1));
 
         Page<ProductResponse> result = service.findAll("Furniture", pageable);
 
         assertEquals(1, result.getTotalElements());
         assertEquals("Desk", result.getContent().get(0).name());
-        verify(repository, never()).findAll(any(Pageable.class));
+        verify(repository, never()).findByActiveTrue(any(Pageable.class));
     }
     
     @Test
     void findBySku_whenMissing_returnsEmpty() {
-        when(repository.findBySku("NOPE")).thenReturn(Optional.empty());
+        when(repository.findBySkuAndActiveTrue("NOPE")).thenReturn(Optional.empty());
 
         assertTrue(service.findBySku("NOPE").isEmpty());
     }
 
     @Test
     void delete_whenMissing_returnsFalseAndDeletesNothing() {
-        when(repository.existsById(99L)).thenReturn(false);
+        when(repository.findByIdAndActiveTrue(99L)).thenReturn(Optional.empty());
 
         boolean deleted = service.deleteProduct(99L);
 
         assertFalse(deleted);
-        verify(repository, never()).deleteById(any());
+        verify(repository, never()).save(any());
+    }
+    
+    @Test
+    void delete_whenExists_marksInactiveAndReturnsTrue() {
+        Product laptop = new Product("SKU-1001", "Laptop", "Electronics", BigDecimal.valueOf(55000), 10);
+        when(repository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(laptop));
+
+        boolean deleted = service.deleteProduct(1L);
+
+        assertTrue(deleted);
+        assertFalse(laptop.isActive());
+        verify(repository).save(laptop);
     }
 
 }

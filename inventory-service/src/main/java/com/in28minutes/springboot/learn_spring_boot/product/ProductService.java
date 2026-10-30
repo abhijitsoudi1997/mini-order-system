@@ -28,19 +28,19 @@ public class ProductService {
 
 	public Page<ProductResponse> findAll(String category, Pageable pageable) {
 		Page<Product> products = (category == null)
-					? productRepository.findAll(pageable)
-					:productRepository.findByCategory(category, pageable);
+					? productRepository.findByActiveTrue(pageable)
+					:productRepository.findByCategoryAndActiveTrue(category, pageable);
 		
 		return products.map(mapper::toResponse);
 
 	}
 
 	public Optional<ProductResponse> findById(Long id) {
-		return productRepository.findById(id).map(mapper::toResponse);
+		return productRepository.findByIdAndActiveTrue(id).map(mapper::toResponse);
 	}
 	
 	public Optional<ProductResponse> findBySku(String sku) {
-		return productRepository.findBySku(sku).map(mapper::toResponse);
+		return productRepository.findBySkuAndActiveTrue(sku).map(mapper::toResponse);
 	}
 
 	public ProductResponse createProduct(ProductRequest request) {
@@ -49,7 +49,7 @@ public class ProductService {
 	}
 
 	public Optional<ProductResponse> updateProduct(Long id, ProductRequest request) {
-		return productRepository.findById(id).map(existing -> {
+		return productRepository.findByIdAndActiveTrue(id).map(existing -> {
 	        existing.setSku(request.sku());
 	        existing.setName(request.name());
 	        existing.setCategory(request.category());
@@ -60,11 +60,11 @@ public class ProductService {
 	}
 
 	public boolean deleteProduct(Long id) {
-		if (!productRepository.existsById(id)) {
-	        return false;
-	    }
-		productRepository.deleteById(id);
-	    return true;
+		return productRepository.findByIdAndActiveTrue(id).map(product -> {
+				product.setActive(false);
+				productRepository.save(product);
+				return true;
+				}).orElse(false);
 	}
 
 }
