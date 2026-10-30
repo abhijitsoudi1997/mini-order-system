@@ -1,5 +1,7 @@
 package com.in28minutes.springboot.learn_spring_boot.product;
 
+import java.math.BigDecimal;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -20,7 +22,8 @@ public class Product {
 	
 	String category;
 	
-	double price;
+	@Column(nullable = false, precision = 10, scale = 2)
+	private BigDecimal price;
 	
 
 	int quantity;
@@ -28,7 +31,7 @@ public class Product {
 	public Product() {
 	}
 	
-	public Product(String sku, String name, String category, double price, int quantity) {
+	public Product(String sku, String name, String category, BigDecimal price, int quantity) {
 		super();
 		this.sku = sku;
 		this.name = name;
@@ -69,11 +72,11 @@ public class Product {
 		this.category = category;
 	}
 
-	public double getPrice() {
+	public BigDecimal getPrice() {
 		return price;
 	}
 
-	public void setPrice(double price) {
+	public void setPrice(BigDecimal price) {
 		this.price = price;
 	}
 

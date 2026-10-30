@@ -2,6 +2,8 @@ package com.in28minutes.springboot.learn_spring_boot.product;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.math.BigDecimal;
+
 import org.junit.jupiter.api.Test;
 
 public class ProductMapperTest {
@@ -10,20 +12,20 @@ public class ProductMapperTest {
 
     @Test
     void toEntity_copiesAllFields() {
-        ProductRequest request = new ProductRequest("SKU-9", "Pen", "Stationery", 20.0, 100);
+        ProductRequest request = new ProductRequest("SKU-9", "Pen", "Stationery", new BigDecimal("20.00"), 100);
 
         Product product = mapper.toEntity(request);
 
         assertEquals("SKU-9", product.getSku());
         assertEquals("Pen", product.getName());
         assertEquals("Stationery", product.getCategory());
-        assertEquals(20.0, product.getPrice());
+        assertEquals(new BigDecimal("20.00"), product.getPrice());
         assertEquals(100, product.getQuantity());
     }
 
     @Test
     void toResponse_copiesAllFields() {
-        Product product = new Product("SKU-9", "Pen", "Stationery", 20.0, 100);
+        Product product = new Product("SKU-9", "Pen", "Stationery", new BigDecimal("20.00"), 100);
 
         ProductResponse response = mapper.toResponse(product);
 

@@ -1,8 +1,11 @@
 package com.in28minutes.springboot.learn_spring_boot.product;
 
+import java.math.BigDecimal;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 public record ProductRequest(
@@ -16,7 +19,8 @@ public record ProductRequest(
         @NotBlank(message = "category is required") String category,
 
         @Schema(description = "Unit price, must be greater than 0", example = "20.0")
-        @Positive(message = "price must be greater than 0") double price,
+		@NotNull(message = "price is required")
+        @Positive(message = "price must be greater than 0") BigDecimal price,
 
         @Schema(description = "Units in stock, 0 or more", example = "500")
         @Min(value = 0, message = "quantity cannot be negative") int quantity) {

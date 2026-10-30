@@ -1,5 +1,7 @@
 package com.in28minutes.springboot.learn_spring_boot.product;
 
+import java.math.BigDecimal;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 public record ProductResponse(
@@ -7,7 +9,7 @@ public record ProductResponse(
         @Schema(example = "SKU-1006") String sku,
         @Schema(example = "Pen") String name,
         @Schema(example = "Stationery") String category,
-        @Schema(example = "20.0") double price,
+        @Schema(example = "20.0") BigDecimal price,
         @Schema(example = "500") int quantity) {
 
 }

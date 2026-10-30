@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,7 +38,7 @@ public class ProductServiceTest {
     
     @Test
     void findById_whenExists_returnsResponse() {
-        Product laptop = new Product("SKU-1001", "Laptop", "Electronics", 55000, 10);
+        Product laptop = new Product("SKU-1001", "Laptop", "Electronics", BigDecimal.valueOf(55000), 10);
         when(repository.findById(1L)).thenReturn(Optional.of(laptop));
 
         Optional<ProductResponse> result = service.findById(1L);
@@ -56,7 +57,7 @@ public class ProductServiceTest {
     @Test
     void findAll_withCategory_usesCategoryQuery() {
     	Pageable pageable = PageRequest.of(0, 10);
-    	Product desk = new Product("SKU-1003", "Desk", "Furniture", 8000, 5);
+    	Product desk = new Product("SKU-1003", "Desk", "Furniture", BigDecimal.valueOf(8000), 5);
         when(repository.findByCategory("Furniture", pageable))
                 .thenReturn(new PageImpl<>(List.of(desk), pageable, 1));
 
