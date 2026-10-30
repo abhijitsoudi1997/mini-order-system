@@ -16,6 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 public class ProductServiceTest {
@@ -51,14 +55,16 @@ public class ProductServiceTest {
 
     @Test
     void findAll_withCategory_usesCategoryQuery() {
-        when(repository.findByCategory("Furniture"))
-                .thenReturn(List.of(new Product("SKU-1003", "Desk", "Furniture", 8000, 5)));
+    	Pageable pageable = PageRequest.of(0, 10);
+    	Product desk = new Product("SKU-1003", "Desk", "Furniture", 8000, 5);
+        when(repository.findByCategory("Furniture", pageable))
+                .thenReturn(new PageImpl<>(List.of(desk), pageable, 1));
 
-        List<ProductResponse> result = service.findAll("Furniture");
+        Page<ProductResponse> result = service.findAll("Furniture", pageable);
 
-        assertEquals(1, result.size());
-        assertEquals("Desk", result.get(0).name());
-        verify(repository, never()).findAll();
+        assertEquals(1, result.getTotalElements());
+        assertEquals("Desk", result.getContent().get(0).name());
+        verify(repository, never()).findAll(any(Pageable.class));
     }
 
     @Test

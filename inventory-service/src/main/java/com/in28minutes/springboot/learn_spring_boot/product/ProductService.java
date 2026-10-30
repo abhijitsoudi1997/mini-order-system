@@ -7,6 +7,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -24,12 +26,12 @@ public class ProductService {
 	
 	
 
-	public List<ProductResponse> findAll(String category) {
-		List<Product> products = (category == null)
-					? productRepository.findAll()
-					:productRepository.findByCategory(category);
+	public Page<ProductResponse> findAll(String category, Pageable pageable) {
+		Page<Product> products = (category == null)
+					? productRepository.findAll(pageable)
+					:productRepository.findByCategory(category, pageable);
 		
-		return products.stream().map(mapper::toResponse).toList();
+		return products.map(mapper::toResponse);
 
 	}
 

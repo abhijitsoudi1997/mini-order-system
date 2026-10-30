@@ -35,7 +35,14 @@ class ProductApiTest {
     void getProducts_returnsSeededProducts() throws Exception {
         mockMvc.perform(get("/products"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[*].sku", hasItem("SKU-1001")));
+                .andExpect(jsonPath("$.content[*].sku", hasItem("SKU-1001")));
+    }
+    
+    @Test
+    void getProducts_withSize_limitsThePage() throws Exception {
+        mockMvc.perform(get("/products").param("size", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(2));
     }
 
     @Test
