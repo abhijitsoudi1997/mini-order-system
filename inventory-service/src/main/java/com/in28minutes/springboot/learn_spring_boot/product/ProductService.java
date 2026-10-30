@@ -38,6 +38,10 @@ public class ProductService {
 	public Optional<ProductResponse> findById(Long id) {
 		return productRepository.findById(id).map(mapper::toResponse);
 	}
+	
+	public Optional<ProductResponse> findBySku(String sku) {
+		return productRepository.findBySku(sku).map(mapper::toResponse);
+	}
 
 	public ProductResponse createProduct(ProductRequest request) {
 		Product saved = productRepository.save(mapper.toEntity(request));

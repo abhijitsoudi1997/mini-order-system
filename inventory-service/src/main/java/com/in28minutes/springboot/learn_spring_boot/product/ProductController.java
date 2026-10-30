@@ -63,6 +63,15 @@ public class ProductController {
 	            .orElseThrow(() -> new ProductNotFoundException(id));
 
 	}
+	
+	@Operation(summary = "Get one product by SKU")
+	@ApiResponse(responseCode = "200", description = "Product found")
+	@ApiResponse(responseCode = "404", description = "Product not found")
+	@GetMapping("/products/sku/{sku}")
+	public ProductResponse getProductBySku(@PathVariable String sku) {
+		return service.findBySku(sku)
+					.orElseThrow(() -> new ProductNotFoundException(sku));
+	}
 
 	@Operation(summary = "Create a product")
 	@ApiResponse(responseCode = "201", description = "Product created")

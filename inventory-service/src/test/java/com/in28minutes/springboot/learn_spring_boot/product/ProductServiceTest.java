@@ -66,6 +66,13 @@ public class ProductServiceTest {
         assertEquals("Desk", result.getContent().get(0).name());
         verify(repository, never()).findAll(any(Pageable.class));
     }
+    
+    @Test
+    void findBySku_whenMissing_returnsEmpty() {
+        when(repository.findBySku("NOPE")).thenReturn(Optional.empty());
+
+        assertTrue(service.findBySku("NOPE").isEmpty());
+    }
 
     @Test
     void delete_whenMissing_returnsFalseAndDeletesNothing() {

@@ -51,6 +51,20 @@ class ProductApiTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").value("Product not found with id 99999"));
     }
+    
+    @Test
+    void getProductBySku_whenExists_returns200() throws Exception {
+        mockMvc.perform(get("/products/sku/SKU-1001"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Laptop"));
+    }
+
+    @Test
+    void getProductBySku_whenMissing_returns404() throws Exception {
+        mockMvc.perform(get("/products/sku/NOPE"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Product not found with sku NOPE"));
+    }
 
     @Test
     void createProduct_withValidBody_returns201AndLocation() throws Exception {
