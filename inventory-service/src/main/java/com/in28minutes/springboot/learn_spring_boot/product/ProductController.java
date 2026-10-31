@@ -33,17 +33,17 @@ import jakarta.validation.Valid;
 @RestController
 public class ProductController {
 
-	private final ProductService service;
-	private final AppProperties properties;
+	private final ProductService productService;
+	private final AppProperties appProperties;
 
 	public ProductController(ProductService service, AppProperties properties) {
-		this.service = service;
-		this.properties = properties;
+		this.productService = service;
+		this.appProperties = properties;
 	}
 
 	@GetMapping("/hello")
 	public String hello() {
-		return properties.getWelcomeMessage();
+		return appProperties.getWelcomeMessage();
 	}
 
 	@Operation(summary = "List products, optionally filtered by category")
@@ -51,7 +51,7 @@ public class ProductController {
 	@GetMapping("/products")
 	public PagedModel<ProductResponse> getProducts(@RequestParam(required = false) String category,
 													@ParameterObject @PageableDefault(size = 10, sort = "id") Pageable pageable) {
-		return new PagedModel<>(service.findAll(category, pageable));
+		return new PagedModel<>(productService.findAll(category, pageable));
 	}
 
 	@Operation(summary = "Get one product by id")
@@ -59,7 +59,7 @@ public class ProductController {
 	@ApiResponse(responseCode = "404", description = "Product not found")
 	@GetMapping("/products/{id}")
 	public ProductResponse getProductsById(@PathVariable Long id) {
-		return service.findById(id)
+		return productService.findById(id)
 	            .orElseThrow(() -> new ProductNotFoundException(id));
 
 	}
@@ -69,7 +69,7 @@ public class ProductController {
 	@ApiResponse(responseCode = "404", description = "Product not found")
 	@GetMapping("/products/sku/{sku}")
 	public ProductResponse getProductBySku(@PathVariable String sku) {
-		return service.findBySku(sku)
+		return productService.findBySku(sku)
 					.orElseThrow(() -> new ProductNotFoundException(sku));
 	}
 
@@ -80,7 +80,7 @@ public class ProductController {
 	@PostMapping("/products")
 	public ResponseEntity<ProductResponse> createProduct(@Valid @RequestBody ProductRequest request) {
 
-		ProductResponse saved = service.createProduct(request);
+		ProductResponse saved = productService.createProduct(request);
 		URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").buildAndExpand(saved.id())
 				.toUri();
 
@@ -95,7 +95,7 @@ public class ProductController {
 	@PutMapping("/products/{id}")
 	public ProductResponse updateProduct(@PathVariable Long id,
 	                                                     @Valid @RequestBody ProductRequest request) {
-		return service.updateProduct(id, request)
+		return productService.updateProduct(id, request)
 	            .orElseThrow(() -> new ProductNotFoundException(id));
 	}
 
@@ -104,7 +104,7 @@ public class ProductController {
 	@ApiResponse(responseCode = "404", description = "Product not found")
 	@DeleteMapping("/products/{id}")
 	public ResponseEntity<Void> deleteProduct(@PathVariable Long id) {
-		if (!service.deleteProduct(id)) {
+		if (!productService.deleteProduct(id)) {
 	        throw new ProductNotFoundException(id);
 	    }
 	    return ResponseEntity.noContent().build();

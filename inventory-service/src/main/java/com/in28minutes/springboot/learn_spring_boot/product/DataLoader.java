@@ -8,23 +8,23 @@ import org.springframework.stereotype.Component;
 @Component
 public class DataLoader implements CommandLineRunner{
 	
-	private final ProductRepository repository;
+	private final ProductRepository productRepository;
 
     public DataLoader(ProductRepository repository) {
-        this.repository = repository;
+        this.productRepository = repository;
     }
 
     @Override
     public void run(String... args) {
     	
-    	if(repository.count() > 0) {
+    	if(productRepository.count() > 0) {
     		return;
     	}
-    	repository.save(new Product("SKU-1001", "Laptop", "Electronics", new BigDecimal("55000.00"), 10));
-    	repository.save(new Product("SKU-1002", "Mouse", "Electronics", new BigDecimal("700.00"), 50));
-    	repository.save(new Product("SKU-1003", "Desk", "Furniture", new BigDecimal("8000.00"), 5));
-    	repository.save(new Product("SKU-1004", "Chair", "Furniture", new BigDecimal("4500.00"), 0));
-    	repository.save(new Product("SKU-1005", "Notebook", "Stationery", new BigDecimal("120.00"), 200));
+    	productRepository.save(new Product("SKU-1001", "Laptop", "Electronics", new BigDecimal("55000.00"), 10));
+    	productRepository.save(new Product("SKU-1002", "Mouse", "Electronics", new BigDecimal("700.00"), 50));
+    	productRepository.save(new Product("SKU-1003", "Desk", "Furniture", new BigDecimal("8000.00"), 5));
+    	productRepository.save(new Product("SKU-1004", "Chair", "Furniture", new BigDecimal("4500.00"), 0));
+    	productRepository.save(new Product("SKU-1005", "Notebook", "Stationery", new BigDecimal("120.00"), 200));
 
     }
 
