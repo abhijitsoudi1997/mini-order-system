@@ -71,10 +71,6 @@ public class Order {
     	
     }
     
-    public void addLine(OrderLine line) {
-    	lines.add(line);
-    	line.setOrder(this);
-    }
     
     @PrePersist
     void onCreate() {
@@ -207,6 +203,17 @@ public class Order {
 		this.lines = lines;
 	}
     
+	public void addLine(OrderLine line) {
+    	lines.add(line);
+    	line.setOrder(this);
+    	recalculateTotal();
+    }
+	
+	public void recalculateTotal() {
+		totalAmount = lines.stream()
+							.map(OrderLine::getLineTotal)
+							.reduce(BigDecimal.ZERO, BigDecimal::add);
+	}
     
 
 }
