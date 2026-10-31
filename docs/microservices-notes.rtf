@@ -1,0 +1,23 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2870
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\froman\fcharset0 Times-Roman;\f1\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww12720\viewh7800\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs24 \cf0 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 # Microservices notes (with respect to Sterling OMS)
+\f1 \kerning1\expnd0\expndtw0 \outl0\strokewidth0 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+\cf0 \
+\pard\pardeftab720\partightenfactor0
+\cf0 Monolith applications will have everything under one application. It will have One big application running, usually one database, even if we have small change the whole application is to deployed every time. \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+\cf0 Unlike monolithic applications, microservices have small chunks or small units which are independent but connected to each other. Which will help us in doing small deployments for example if we want to have changes only in inventory side, will deploy inventory service only which won\'92t affect order service or any other service. Each service will have their own database and talking over the network with other services using REST or messages. Order stores a copy of the SKU, name and price on each order line, and doesn\'92t point into Inventory\'92s tables.\
+Depending on the incoming load for each service, scalability of that service can be decided without disturbing other services. Teams can work on each service independently. If anything fault happen, it will be traced easily and will stay within the service. \
+Each service can be platform independent while developing. Which ever technology it can be developed in.\
+However micro services also have some problems like if network call fails or it gets slow it would affect. Its very hard to test end-to-end. data consistency (no single database transaction across services, so you get eventual consistency, Day 19) and extra moving parts (gateway, discovery, Docker, monitoring).\
+Order Management Service will work on microservices it has inventory service, order service much more which depends on the architecture which is best for industry.\
+To be honest, small applications with a small team are better in monolith. But microservices are better approach for larger applications.\
+one slow service can drag down the services calling it (a cascading failure). Tracing is also harder in microservices, since one request crosses several services, which is why distributed tracing tools exist. Rewrite that sentence with both sides.}
