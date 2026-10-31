@@ -1,4 +1,4 @@
-package com.in28minutes.springboot.learn_spring_boot.product;
+package com.abhijit.inventory_service.product;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -21,6 +21,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+
+import com.abhijit.inventory_service.product.Product;
+import com.abhijit.inventory_service.product.ProductMapper;
+import com.abhijit.inventory_service.product.ProductRepository;
+import com.abhijit.inventory_service.product.ProductResponse;
+import com.abhijit.inventory_service.product.ProductService;
 
 @ExtendWith(MockitoExtension.class)
 public class ProductServiceTest {

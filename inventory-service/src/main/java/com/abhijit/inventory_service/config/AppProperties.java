@@ -1,4 +1,4 @@
-package com.in28minutes.springboot.learn_spring_boot.config;
+package com.abhijit.inventory_service.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;

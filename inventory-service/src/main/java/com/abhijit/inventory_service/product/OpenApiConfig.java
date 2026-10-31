@@ -1,4 +1,4 @@
-package com.in28minutes.springboot.learn_spring_boot.product;
+package com.abhijit.inventory_service.product;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

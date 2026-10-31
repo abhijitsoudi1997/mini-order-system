@@ -1,10 +1,15 @@
-package com.in28minutes.springboot.learn_spring_boot.product;
+package com.abhijit.inventory_service.product;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
 
 import org.junit.jupiter.api.Test;
+
+import com.abhijit.inventory_service.product.Product;
+import com.abhijit.inventory_service.product.ProductMapper;
+import com.abhijit.inventory_service.product.ProductRequest;
+import com.abhijit.inventory_service.product.ProductResponse;
 
 public class ProductMapperTest {
 	

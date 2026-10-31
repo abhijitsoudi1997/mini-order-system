@@ -1,4 +1,4 @@
-package com.in28minutes.springboot.learn_spring_boot;
+package com.abhijit.inventory_service;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -6,7 +6,7 @@ import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
 @ActiveProfiles("test")
-class LearnSpringBootApplicationTests {
+class InventoryServiceApplicationTests {
 
 	@Test
 	void contextLoads() {

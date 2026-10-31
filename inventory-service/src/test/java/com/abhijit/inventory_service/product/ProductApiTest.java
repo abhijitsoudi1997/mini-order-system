@@ -1,4 +1,4 @@
-package com.in28minutes.springboot.learn_spring_boot.product;
+package com.abhijit.inventory_service.product;
 
 import static org.hamcrest.Matchers.hasItem;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
