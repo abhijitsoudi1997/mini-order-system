@@ -1,11 +1,15 @@
 package com.abhijit.order_service.order;
 
+import java.util.Optional;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.abhijit.order_service.catalog.ProductCatalog;
 import com.abhijit.order_service.catalog.ProductInfo;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class OrderService {
@@ -21,6 +25,21 @@ public class OrderService {
 		this.mapper = mapper;
 		this.numberGenerator = numberGenerator;
 		this.productCatalog = productCatalog;
+	}
+	
+	@Transactional(readOnly = true)
+	public Optional<OrderResponse> findById(Long id) {
+	    return orderRepository.findById(id).map(mapper::toResponse);
+	}
+
+	@Transactional(readOnly = true)
+	public Optional<OrderResponse> findByOrderNumber(String orderNumber) {
+	    return orderRepository.findByOrderNumber(orderNumber).map(mapper::toResponse);
+	}
+
+	@Transactional(readOnly = true)
+	public Page<OrderResponse> findByCustomerEmail(String customerEmail, Pageable pageable) {
+	    return orderRepository.findByCustomerEmailIgnoreCase(customerEmail, pageable).map(mapper::toResponse);
 	}
 	
 	@Transactional

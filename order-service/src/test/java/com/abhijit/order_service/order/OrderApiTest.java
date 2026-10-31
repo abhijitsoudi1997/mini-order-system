@@ -1,7 +1,7 @@
 package com.abhijit.order_service.order;
 
 
-
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,6 +17,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
+
+import com.jayway.jsonpath.JsonPath;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -58,6 +60,33 @@ public class OrderApiTest {
 
         mockMvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isBadRequest());
+    }
+    
+    @Test
+    void getOrder_byIdAndByNumber_andListByEmail() throws Exception {
+        String body = """
+                {"customerName":"Round Four","customerEmail":"round4@example.com",
+                 "shippingAddress":{"line":"12 MG Road","city":"Mysore","state":"Karnataka","pincode":"570001"},
+                 "items":[{"sku":"SKU-1003","quantity":1}]}
+                """;
+        String json = mockMvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        Number id = JsonPath.read(json, "$.id");
+        String number = JsonPath.read(json, "$.orderNumber");
+
+        mockMvc.perform(get("/orders/" + id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderNumber").value(number));
+
+        mockMvc.perform(get("/orders/number/" + number))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(1));
+
+        mockMvc.perform(get("/orders").param("customerEmail", "round4@example.com"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.page.totalElements").value(1));
     }
 
 }
