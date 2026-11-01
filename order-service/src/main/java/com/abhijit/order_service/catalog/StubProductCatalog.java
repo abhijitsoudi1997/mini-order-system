@@ -4,9 +4,11 @@ import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Optional;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 @Component
+@Profile("test")
 public class StubProductCatalog implements ProductCatalog{
 	
 	private final Map<String, ProductInfo> products = Map.of(
@@ -18,6 +20,7 @@ public class StubProductCatalog implements ProductCatalog{
 
 	@Override
 	public Optional<ProductInfo> findBySku(String sku) {
+		
 		
 		return Optional.ofNullable(products.get(sku));
 	}
