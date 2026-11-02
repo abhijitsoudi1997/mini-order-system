@@ -1,0 +1,369 @@
+{
+  "info": {
+    "_postman_id": "70682257-2de5-4b66-aae4-f08006fa54bf",
+    "name": "mini-order-system",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "8219742"
+  },
+  "item": [
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "List Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryUrl}}/products?size=5",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "size",
+                  "value": "5"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET by SKU",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryUrl}}/products/sku/SKU-1001",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "products",
+                "sku",
+                "SKU-1001"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryUrl}}/products/1",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "products",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Product",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sku\": \"SKU-1006\",\n    \"name\": \"Pen\",\n    \"category\": \"Stationery\",\n    \"price\": 20.00,\n    \"quantity\": 500\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{inventoryUrl}}/products",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "products"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Product",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sku\": \"SKU-1001\",\n    \"name\": \"Laptop\",\n    \"category\": \"Electronics\",\n    \"price\": 55000.00,\n    \"quantity\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{inventoryUrl}}/products/1",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "products",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Product",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{inventoryUrl}}/products/6",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "products",
+                "6"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Invalid Product",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"sku\": \"SKU-1007\",\n    \"name\": \"\",\n    \"category\": \"Stationery\",\n    \"price\": -5,\n    \"quantity\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{inventoryUrl}}/products",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "products"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "Create Order",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"customerName\": \"Abhijit Soudi\",\n    \"customerEmail\": \"abhijit@example.com\",\n    \"customerPhone\": \"9876543210\",\n    \"shippingAddress\": {\n        \"line\": \"12 MG Road\",\n        \"city\": \"Mysore\",\n        \"state\": \"Karnataka\",\n        \"pincode\": \"570001\"\n    },\n    \"items\": [\n        {\n            \"sku\": \"SKU-1001\",\n            \"quantity\": 1\n        },\n        {\n            \"sku\": \"SKU-1002\",\n            \"quantity\": 2\n        }\n    ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{orderUrl}}/orders",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Order, invalid",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"customerName\": \"Abhijit Soudi\",\n    \"customerEmail\": \"abhijit@example.com\",\n    \"customerPhone\": \"9876543210\",\n    \"shippingAddress\": {\n        \"line\": \"12 MG Road\",\n        \"city\": \"Mysore\",\n        \"state\": \"Karnataka\",\n        \"pincode\": \"57000\"\n    },\n    \"items\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{orderUrl}}/orders",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Order with unknown SKU",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"customerName\": \"Abhijit Soudi\",\n    \"customerEmail\": \"abhijit@example.com\",\n    \"customerPhone\": \"9876543210\",\n    \"shippingAddress\": {\n        \"line\": \"12 MG Road\",\n        \"city\": \"Mysore\",\n        \"state\": \"Karnataka\",\n        \"pincode\": \"570001\"\n    },\n    \"items\": [\n        {\n            \"sku\": \"SKU-9999\",\n            \"quantity\": 1\n        }\n    ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{orderUrl}}/orders",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create order, with out of stock SKU",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Abhijit Soudi\",\n  \"customerEmail\": \"abhijit@example.com\",\n  \"customerPhone\": \"9876543210\",\n  \"shippingAddress\": {\n    \"line\": \"12 MG Road\",\n    \"city\": \"Mysore\",\n    \"state\": \"Karnataka\",\n    \"pincode\": \"570001\"\n  },\n  \"items\": [\n    { \"sku\": \"SKU-1004\", \"quantity\": 1 }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{orderUrl}}/orders",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "orders"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get order by id",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/orders/1",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "orders",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get order by number",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/orders/number/ORD-20261031-L78E48",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "orders",
+                "number",
+                "ORD-20261031-L78E48"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List Orders by email",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/orders?customerEmail=abhijit@example.com",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "orders"
+              ],
+              "query": [
+                {
+                  "key": "customerEmail",
+                  "value": "abhijit@example.com"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Order Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/actuator/health",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "inventoryUrl",
+      "value": ""
+    },
+    {
+      "key": "orderUrl",
+      "value": ""
+    }
+  ]
+}
