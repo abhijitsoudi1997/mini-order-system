@@ -50,6 +50,9 @@ public class OrderService {
 		for(OrderItemRequest item : request.items()) {
 			ProductInfo product = productCatalog.findBySku(item.sku())
 					.orElseThrow(() -> new UnknownProductException(item.sku()));
+			if(product.availableQuantity() < item.quantity()) {
+				throw new InsufficientStockException(item.sku(), item.quantity(), product.availableQuantity());
+			}
 			order.addLine(new OrderLine(product.sku(), product.name(), item.quantity(), product.unitPrice()));
 		}
 		

@@ -5,6 +5,8 @@ import java.util.Optional;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
+import com.abhijit.order_service.order.InventoryUnavailableException;
+
 import feign.FeignException;
 
 @Component
@@ -23,9 +25,11 @@ public class InventoryProductCatalog implements ProductCatalog{
 		
 		try {
 			InventoryProduct inventoryProduct = inventoryClient.getBySku(sku);
-			return Optional.of(new ProductInfo(inventoryProduct.sku(), inventoryProduct.name(), inventoryProduct.price()));
+			return Optional.of(new ProductInfo(inventoryProduct.sku(), inventoryProduct.name(), inventoryProduct.price(), inventoryProduct.quantity()));
 		} catch(FeignException.NotFound e) {
 			return Optional.empty();
+		}catch(FeignException e) {
+			throw new InventoryUnavailableException("Inventory Service is unavailable, please try again later", e);
 		}
 		
 	}
