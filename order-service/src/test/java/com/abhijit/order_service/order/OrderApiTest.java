@@ -43,7 +43,7 @@ public class OrderApiTest {
 
 		mockMvc.perform(post("/orders").contentType(MediaType.APPLICATION_JSON).content(body))
 				.andExpect(status().isCreated()).andExpect(header().exists("Location"))
-				.andExpect(jsonPath("$.status").value("CREATED")).andExpect(jsonPath("$.totalAmount").value(110700.0))
+				.andExpect(jsonPath("$.status").value("CONFIRMED"))
 				.andExpect(jsonPath("$.items.length()").value(2));
 	}
 

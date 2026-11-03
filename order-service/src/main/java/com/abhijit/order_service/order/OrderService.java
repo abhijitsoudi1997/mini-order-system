@@ -1,13 +1,16 @@
 package com.abhijit.order_service.order;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import com.abhijit.order_service.catalog.StockReservation;
 import com.abhijit.order_service.catalog.ProductCatalog;
 import com.abhijit.order_service.catalog.ProductInfo;
+import com.abhijit.order_service.catalog.StockLine;
 
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,13 +21,15 @@ public class OrderService {
 	private final OrderMapper mapper;
 	private final OrderNumberGenerator numberGenerator;
 	private final ProductCatalog productCatalog;
+	private final StockReservation stockReservation;
 	
 	public OrderService(OrderRepository orderRepository, OrderMapper mapper, 
-			OrderNumberGenerator numberGenerator, ProductCatalog productCatalog) {
+			OrderNumberGenerator numberGenerator, ProductCatalog productCatalog, StockReservation stockReservation) {
 		this.orderRepository = orderRepository;
 		this.mapper = mapper;
 		this.numberGenerator = numberGenerator;
 		this.productCatalog = productCatalog;
+		this.stockReservation = stockReservation;
 	}
 	
 	@Transactional(readOnly = true)
@@ -50,13 +55,22 @@ public class OrderService {
 		for(OrderItemRequest item : request.items()) {
 			ProductInfo product = productCatalog.findBySku(item.sku())
 					.orElseThrow(() -> new UnknownProductException(item.sku()));
-			if(product.availableQuantity() < item.quantity()) {
-				throw new InsufficientStockException(item.sku(), item.quantity(), product.availableQuantity());
-			}
 			order.addLine(new OrderLine(product.sku(), product.name(), item.quantity(), product.unitPrice()));
 		}
 		
 		Order saved = orderRepository.save(order);
+		
+		List<StockLine> lines = request.items().stream()
+									.map(i -> new StockLine(i.sku(), i.quantity())).toList();
+		
+		try {
+			stockReservation.reserve(saved.getOrderNumber(), lines);
+			saved.confirm();
+		} catch(InsufficientStockException e) {
+			saved.fail(e.getMessage());
+		}
+		
+		
 		return mapper.toResponse(saved);
 	}
 

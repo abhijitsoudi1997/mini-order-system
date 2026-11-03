@@ -1,6 +1,7 @@
 package com.abhijit.order_service.order;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 
 import java.math.BigDecimal;
@@ -22,5 +23,26 @@ public class OrderTest {
         assertSame(order, laptop.getOrder());
         assertEquals(2, order.getLines().size());
     }
+	
+	@Test
+	void confirmSetsStatusConfirmedAndClearsFailureReason() {
+	    Order order = new Order();
+	    order.fail("Insufficient stock");      // first put it into a failed state
+
+	    order.confirm();
+
+	    assertEquals(OrderStatus.CONFIRMED, order.getStatus());
+	    assertNull(order.getFailureReason());
+	}
+
+	@Test
+	void failSetsStatusFailedAndStoresReason() {
+	    Order order = new Order();
+
+	    order.fail("Insufficient stock for SKU-1004 (requested 1, available 0)");
+
+	    assertEquals(OrderStatus.FAILED, order.getStatus());
+	    assertEquals("Insufficient stock for SKU-1004 (requested 1, available 0)", order.getFailureReason());
+	}
 
 }

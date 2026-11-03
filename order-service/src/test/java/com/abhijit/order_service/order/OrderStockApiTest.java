@@ -10,9 +10,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -57,9 +57,8 @@ public class OrderStockApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(orderJson("SKU-1004", 1)))          // stock is 0
             .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.status").value(409))
-            .andExpect(jsonPath("$.message").value(
-                org.hamcrest.Matchers.containsString("Insufficient stock for SKU-1004")));
+            .andExpect(jsonPath("$.status").value("FAILED"))
+            .andExpect(jsonPath("$.failureReason").value(containsString("Insufficient stock for SKU-1004")));
     }
 
     @Test
@@ -68,8 +67,7 @@ public class OrderStockApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(orderJson("SKU-1003", 6)))          // stock is 5
             .andExpect(status().isConflict())
-            .andExpect(jsonPath("$.message").value(
-                org.hamcrest.Matchers.containsString("requested 6, available 5")));
+            .andExpect(jsonPath("$.failureReason").value(containsString("requested 6, available 5")));
     }
 
     @Test
@@ -89,19 +87,20 @@ public class OrderStockApiTest {
     }
 
     @Test
-    void rejectedOrderIsNotSaved() throws Exception {
-        String uniqueEmail = "nothing-saved@example.com";
+    void rejectedOrderIsSavedAsFailed() throws Exception {
+        String uniqueEmail = "failed-order@example.com";
         String body = orderJson("SKU-1004", 1).replace(EMAIL, uniqueEmail);
 
         mockMvc.perform(post("/orders")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body))
-            .andExpect(status().isConflict());
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.status").value("FAILED"));
 
-        // no order should exist for this email
         mockMvc.perform(get("/orders").param("customerEmail", uniqueEmail))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.page.totalElements").value(0));
+            .andExpect(jsonPath("$.page.totalElements").value(1))
+            .andExpect(jsonPath("$.content[0].status").value("FAILED"));
     }
 
 }

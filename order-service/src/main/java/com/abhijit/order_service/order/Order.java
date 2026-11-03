@@ -217,6 +217,16 @@ public class Order {
 							.map(OrderLine::getLineTotal)
 							.reduce(BigDecimal.ZERO, BigDecimal::add);
 	}
+	
+	public void confirm() {
+		this.status = OrderStatus.CONFIRMED;
+		this.failureReason = null;
+	}
+	
+	public void fail(String reason) {
+		this.status = OrderStatus.FAILED;
+		this.failureReason = reason;
+	}
     
 
 }

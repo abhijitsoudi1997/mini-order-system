@@ -5,6 +5,7 @@ import java.net.URI;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.PagedModel;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -49,6 +50,11 @@ public class OrderController {
 	@PostMapping
 	public ResponseEntity<OrderResponse> createOrder(@Valid @RequestBody CreateOrderRequest request){
 		OrderResponse created = orderService.createOrder(request);
+		
+		if(created.status() == OrderStatus.FAILED) {
+			return ResponseEntity.status(HttpStatus.CONFLICT).body(created);
+		}
+		
 		URI location = ServletUriComponentsBuilder.fromCurrentRequest()
 												.path("/{id}")
 												.buildAndExpand(created.id())
