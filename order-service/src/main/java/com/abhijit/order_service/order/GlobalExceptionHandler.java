@@ -86,6 +86,12 @@ public class GlobalExceptionHandler {
 			HttpServletRequest request) {
 		return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, List.of());
 	}
+	
+	@ExceptionHandler(InvalidOrderStateException.class)
+	public ResponseEntity<ErrorResponse> handleInvalidOrderState(InvalidOrderStateException ex,
+			HttpServletRequest request) {
+		return build(HttpStatus.CONFLICT, ex.getMessage(), request, List.of());
+	}
 
 	private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, HttpServletRequest request,
 			List<String> details) {

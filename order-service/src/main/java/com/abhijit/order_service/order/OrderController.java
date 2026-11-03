@@ -62,5 +62,10 @@ public class OrderController {
 		return ResponseEntity.created(location).body(created);
 		
 	}
+	
+	@PostMapping("/{id}/cancel")
+	public OrderResponse cancelOrder(@PathVariable Long id) {
+		return orderService.cancelOrder(id);
+	}
 
 }

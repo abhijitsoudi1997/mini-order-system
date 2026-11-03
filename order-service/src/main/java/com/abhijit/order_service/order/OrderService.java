@@ -73,5 +73,24 @@ public class OrderService {
 		
 		return mapper.toResponse(saved);
 	}
+	
+	@Transactional
+	public OrderResponse cancelOrder(Long id){
+		Order order = orderRepository.findById(id)
+						.orElseThrow(() -> new OrderNotFoundException(id));
+		
+		if(order.getStatus() != OrderStatus.CONFIRMED) {
+			throw new InvalidOrderStateException(id, order.getStatus());
+		}
+		
+		List<StockLine> lines = order.getLines().stream()
+												.map(l -> new StockLine(l.getSku(), l.getQuantity()))
+												.toList();
+		
+		stockReservation.release(order.getOrderNumber(), lines);
+		order.cancel();
+		
+		return mapper.toResponse(order);
+	}
 
 }

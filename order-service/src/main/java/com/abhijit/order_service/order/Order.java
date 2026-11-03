@@ -227,6 +227,10 @@ public class Order {
 		this.status = OrderStatus.FAILED;
 		this.failureReason = reason;
 	}
+	
+	public void cancel() {
+		this.status = OrderStatus.CANCELLED;
+	}
     
 
 }

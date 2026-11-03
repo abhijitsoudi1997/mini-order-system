@@ -7,13 +7,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -130,5 +133,54 @@ class OrderServiceTest {
 
         verify(stockReservation, never()).reserve(anyString(), anyList());
         verify(orderRepository, never()).save(any(Order.class));
+    }
+    
+    private Order confirmedOrder() {
+        Order order = new Order();
+        order.setOrderNumber("ORD-TEST-1");
+        order.addLine(new OrderLine("SKU-1001", "Laptop", 1, new BigDecimal("55000.00")));
+        order.confirm();
+        return order;
+    }
+
+    @Test
+    void cancelReleasesStockAndSetsCancelled() {
+        Order order = confirmedOrder();
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+
+        OrderResponse response = service.cancelOrder(1L);
+
+        assertEquals(OrderStatus.CANCELLED, response.status());
+        verify(stockReservation).release(eq("ORD-TEST-1"), linesCaptor.capture());
+        assertEquals("SKU-1001", linesCaptor.getValue().get(0).sku());
+        assertEquals(1, linesCaptor.getValue().get(0).quantity());
+    }
+
+    @Test
+    void cancelOfFailedOrderIsRejectedAndNothingIsReleased() {
+        Order order = confirmedOrder();
+        order.fail("Insufficient stock");
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+
+        assertThrows(InvalidOrderStateException.class, () -> service.cancelOrder(1L));
+        verify(stockReservation, never()).release(anyString(), anyList());
+    }
+
+    @Test
+    void cancelOfUnknownOrderThrowsNotFound() {
+        when(orderRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(OrderNotFoundException.class, () -> service.cancelOrder(99L));
+    }
+
+    @Test
+    void orderStaysConfirmedWhenReleaseFails() {
+        Order order = confirmedOrder();
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+        doThrow(new InventoryUnavailableException("down", new RuntimeException()))
+                .when(stockReservation).release(anyString(), anyList());
+
+        assertThrows(InventoryUnavailableException.class, () -> service.cancelOrder(1L));
+        assertEquals(OrderStatus.CONFIRMED, order.getStatus());
     }
 }

@@ -2,7 +2,7 @@
 
 A small order management system built with **Spring Boot microservices**, inspired by my experience with IBM Sterling Order Management (OMS). The goal is to rebuild the core order flow (products, stock, orders) as independent services that talk to each other.
 
-> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign). Service discovery, API Gateway, stock reservation, resilience and security are on the roadmap below.
+> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including stock reservation. Service discovery, API Gateway, resilience and security are on the roadmap below.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ A small order management system built with **Spring Boot microservices**, inspir
               |                             |
      +--------v--------+           +--------v--------+
      | Inventory       | <-------- | Order           |
-     | Service (8081)  |  GET /products/sku/{sku}    |
+     | Service (8081)  |  REST (OpenFeign)           |
      +-----------------+  (OpenFeign) +--------------+
                                     | Service (8082)  |
                                     +-----------------+
@@ -56,6 +56,8 @@ Manages the product catalogue. Products are stored in MySQL. Deleting a product 
 | POST | `/products` | Create a product | 201 with a `Location` header (400 invalid, 409 duplicate SKU) |
 | PUT | `/products/{id}` | Replace a product | 200 (400 invalid, 404 if not found) |
 | DELETE | `/products/{id}` | Soft delete a product | 204 (404 if not found) |
+| POST | `/inventory/reserve` | Reserve stock for an order (all items or none) | 200 (400 invalid, 404 unknown SKU, 409 not enough stock) |
+| POST | `/inventory/release` | Release reserved stock | 200 (400 invalid, 404 unknown SKU, 409 more than reserved) |
 | GET | `/hello` | Returns the configured welcome message | 200 |
 | GET | `/actuator/health` | Health check | 200 |
 
@@ -80,14 +82,14 @@ Validation rules: `sku`, `name` and `category` must not be blank, `price` is req
 A product in a response also has its `id`:
 
 ```json
-{ "id": 6, "sku": "SKU-1006", "name": "Pen", "category": "Stationery", "price": 20.00, "quantity": 500 }
+{ "id": 6, "sku": "SKU-1006", "name": "Pen", "category": "Stationery", "price": 20.00, "quantity": 500, "reservedQuantity": 0, "availableQuantity": 500 }
 ```
 
 `GET /products` returns a page:
 
 ```json
 {
-  "content": [ { "id": 1, "sku": "SKU-1001", "name": "Laptop", "category": "Electronics", "price": 55000.00, "quantity": 10 } ],
+  "content": [ { "id": 1, "sku": "SKU-1001", "name": "Laptop", "category": "Electronics", "price": 55000.00, "quantity": 10, "reservedQuantity": 0, "availableQuantity": 10 } ],
   "page": { "size": 10, "number": 0, "totalElements": 5, "totalPages": 1 }
 }
 ```
@@ -124,6 +126,16 @@ curl -X POST http://localhost:8081/products \
 curl -X DELETE http://localhost:8081/products/6
 ```
 
+### Stock reservation
+
+`quantity` is the total on hand. `reservedQuantity` is held for orders, and `availableQuantity = quantity - reservedQuantity`. Reserve and release take the same body:
+
+```json
+{ "orderNumber": "ORD-20261103-AB12CD", "items": [ { "sku": "SKU-1001", "quantity": 2 } ] }
+```
+
+Reserving is **atomic and all-or-nothing**. Each item is one conditional SQL `UPDATE ... WHERE quantity - reserved_quantity >= :qty`, so two orders competing for the last unit can never oversell. If any item cannot be reserved, the whole call is rolled back.
+
 ## Order Service
 
 Creates and reads orders. When an order is placed, the service calls the Inventory Service for each SKU (name, price, stock) and stores a **snapshot** of the name and unit price on each order line, so later price changes never rewrite old orders. The service has its own database (`order_db`).
@@ -136,6 +148,7 @@ Creates and reads orders. When an order is placed, the service calls the Invento
 | GET | `/orders/{id}` | Get an order by id | 200 (404 if not found) |
 | GET | `/orders/number/{orderNumber}` | Get an order by order number | 200 (404 if not found) |
 | GET | `/orders?customerEmail=...` | List a customer's orders, paged, newest first | 200 |
+| POST | `/orders/{id}/cancel` | Cancel a CONFIRMED order and release its stock | 200 (404 if not found, 409 if not CONFIRMED) |
 | GET | `/actuator/health` | Health check | 200 |
 
 ### Place an order
@@ -152,17 +165,28 @@ Creates and reads orders. When an order is placed, the service calls the Invento
 
 ### How Order talks to Inventory
 
-`InventoryClient` (OpenFeign) calls `GET {inventory.base-url}/products/sku/{sku}`. The base URL is set in `application.properties` (`http://localhost:8081`). Timeouts: 2 s connect, 5 s read.
+`InventoryClient` (OpenFeign) calls `GET /products/sku/{sku}` for the name and price, then `POST /inventory/reserve` to hold the stock (and `POST /inventory/release` when an order is cancelled). The base URL is set in `application.properties` (`inventory.base-url=http://localhost:8081`). Timeouts: 2 s connect, 5 s read.
 
 | Situation | Result |
 |---|---|
 | Invalid request body | 400 with field details |
 | SKU not found in Inventory | 400 |
-| Quantity is more than stock | 409 Conflict, no order is saved |
+| Not enough stock | 409 Conflict, the order is saved with status `FAILED` and a `failureReason` |
 | Inventory stopped or returns 5xx | 503 Service Unavailable |
-| Everything fine | 201, status `CREATED` |
+| Stock reserved | 201, status `CONFIRMED` |
+| Cancelling an order that is not CONFIRMED | 409 |
 
 Errors use the same JSON shape as the Inventory Service, with an added `path` field.
+
+### Order lifecycle
+
+```
+CREATED --reserve ok--> CONFIRMED --cancel (stock released)--> CANCELLED
+   |
+   +--not enough stock--> FAILED (kept, with failureReason)
+```
+
+If Inventory is unreachable, the request fails with 503 and nothing is saved.
 
 ## Run locally
 
@@ -233,8 +257,8 @@ cd order-service && ./mvnw test
 
 The tests do not need MySQL or a running Inventory Service. Integration tests run with the `test` profile against an in-memory H2 database, and the Order Service uses a stub product catalog in that profile.
 
-- Inventory Service (17): `ProductServiceTest` (Mockito), `ProductMapperTest`, `ProductApiTest` (MockMvc against the real controllers, validation and error handler)
-- Order Service (26): `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest`, `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (stock and rollback rules), `InventoryProductCatalogTest` (Mockito, mocked Feign client)
+- Inventory Service: `ProductServiceTest` (Mockito), `ProductMapperTest`, `ProductApiTest` (MockMvc against the real controllers, validation and error handler), `ProductReservationTest` (atomic reserve and release against H2), `StockApiTest` (reserve and release endpoints, all-or-nothing)
+- Order Service: `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest` (Mockito, mocked stock reservation), `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (CONFIRMED and FAILED outcomes), `OrderCancelApiTest`, `InventoryProductCatalogTest` and `InventoryStockReservationTest` (Mockito, mocked Feign client)
 
 ## Roadmap
 
@@ -248,7 +272,7 @@ The tests do not need MySQL or a running Inventory Service. Integration tests ru
 - [x] Pagination, get by SKU, soft delete, BigDecimal prices
 - [x] Order Service with orders and order lines
 - [x] Service-to-service call (OpenFeign), stock check, error handling
-- [ ] Stock reservation and consistency between services
+- [x] Stock reservation (reserve, release, confirm, cancel)
 - [ ] Resilience4j (retry, circuit breaker)
 - [ ] Service discovery (Eureka), API Gateway
 - [ ] Security

@@ -44,5 +44,15 @@ public class OrderTest {
 	    assertEquals(OrderStatus.FAILED, order.getStatus());
 	    assertEquals("Insufficient stock for SKU-1004 (requested 1, available 0)", order.getFailureReason());
 	}
+	
+	@Test
+	void cancelSetsStatusCancelled() {
+	    Order order = new Order();
+	    order.confirm();
+
+	    order.cancel();
+
+	    assertEquals(OrderStatus.CANCELLED, order.getStatus());
+	}
 
 }

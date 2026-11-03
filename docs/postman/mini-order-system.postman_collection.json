@@ -165,6 +165,60 @@
             }
           },
           "response": []
+        },
+        {
+          "name": "Reserve Stock",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"orderNumber\": \"ORD-MANUAL-1\",\n    \"items\": [\n        {\n            \"sku\": \"SKU-1001\",\n            \"quantity\": 2\n        }\n    ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{inventoryUrl}}/inventory/reserve",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "reserve"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Release Stock",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"orderNumber\": \"ORD-MANUAL-1\",\n    \"items\": [\n        {\n            \"sku\": \"SKU-1001\",\n            \"quantity\": 2\n        }\n    ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{inventoryUrl}}/inventory/release",
+              "host": [
+                "{{inventoryUrl}}"
+              ],
+              "path": [
+                "inventory",
+                "release"
+              ]
+            }
+          },
+          "response": []
         }
       ]
     },
@@ -281,13 +335,13 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{orderUrl}}/orders/1",
+              "raw": "{{orderUrl}}/orders/14",
               "host": [
                 "{{orderUrl}}"
               ],
               "path": [
                 "orders",
-                "1"
+                "14"
               ]
             }
           },
@@ -348,6 +402,25 @@
               "path": [
                 "actuator",
                 "health"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Cancel Order",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/orders/11/cancel",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "orders",
+                "11",
+                "cancel"
               ]
             }
           },
