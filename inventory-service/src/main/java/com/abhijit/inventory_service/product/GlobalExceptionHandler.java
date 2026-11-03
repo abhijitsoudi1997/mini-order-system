@@ -48,6 +48,16 @@ public class GlobalExceptionHandler {
         return build(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error",
                 "Something went wrong", List.of());
     }
+    
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<ErrorResponse> handleInsufficientStock(InsufficientStockException ex) {
+        return build(HttpStatus.CONFLICT, "Conflict", ex.getMessage(), List.of());
+    }
+    
+    @ExceptionHandler(InvalidReleaseException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidRelease(InvalidReleaseException ex) {
+    	return build(HttpStatus.CONFLICT, "Conflict", ex.getMessage(), List.of());
+    }
 
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String error,
                                                 String message, List<String> details) {

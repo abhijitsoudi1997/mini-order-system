@@ -21,7 +21,9 @@ public class ProductMapper {
                 product.getName(),
                 product.getCategory(),
                 product.getPrice(),
-                product.getQuantity());
+                product.getQuantity(),
+                product.getReservedQuantity(),
+                product.available());
     }
 
 }

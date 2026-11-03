@@ -29,6 +29,9 @@ public class Product {
 
 	@Column(nullable = false)
 	private boolean active = true;
+	
+	@Column(name = "reserved_quantity", nullable = false)
+	private int reservedQuantity = 0;
 
 	public Product() {
 	}
@@ -96,6 +99,18 @@ public class Product {
 
 	public void setActive(boolean active) {
 		this.active = active;
+	}
+
+	public int getReservedQuantity() {
+		return reservedQuantity;
+	}
+
+	public void setReservedQuantity(int reservedQuantity) {
+		this.reservedQuantity = reservedQuantity;
+	}
+	
+	public int available() {
+		return quantity - reservedQuantity;
 	}
 
 }

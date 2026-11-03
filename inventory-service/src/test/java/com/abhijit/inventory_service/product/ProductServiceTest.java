@@ -1,7 +1,9 @@
 package com.abhijit.inventory_service.product;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -32,22 +34,22 @@ import com.abhijit.inventory_service.product.ProductService;
 public class ProductServiceTest {
 	
 	@Mock
-    private ProductRepository repository;
+    private ProductRepository productRepository;
 
-    private ProductService service;
+    private ProductService productService;
 
     @BeforeEach
     void setUp() {
-        service = new ProductService(repository, new ProductMapper());
+        productService = new ProductService(productRepository, new ProductMapper());
     }
 
     
     @Test
     void findById_whenExists_returnsResponse() {
         Product laptop = new Product("SKU-1001", "Laptop", "Electronics", BigDecimal.valueOf(55000), 10);
-        when(repository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(laptop));
+        when(productRepository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(laptop));
 
-        Optional<ProductResponse> result = service.findById(1L);
+        Optional<ProductResponse> result = productService.findById(1L);
 
         assertTrue(result.isPresent());
         assertEquals("Laptop", result.get().name());
@@ -55,52 +57,86 @@ public class ProductServiceTest {
 
     @Test
     void findById_whenMissing_returnsEmpty() {
-        when(repository.findByIdAndActiveTrue(99L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndActiveTrue(99L)).thenReturn(Optional.empty());
 
-        assertTrue(service.findById(99L).isEmpty());
+        assertTrue(productService.findById(99L).isEmpty());
     }
 
     @Test
     void findAll_withCategory_usesCategoryQuery() {
     	Pageable pageable = PageRequest.of(0, 10);
     	Product desk = new Product("SKU-1003", "Desk", "Furniture", BigDecimal.valueOf(8000), 5);
-        when(repository.findByCategoryAndActiveTrue("Furniture", pageable))
+        when(productRepository.findByCategoryAndActiveTrue("Furniture", pageable))
                 .thenReturn(new PageImpl<>(List.of(desk), pageable, 1));
 
-        Page<ProductResponse> result = service.findAll("Furniture", pageable);
+        Page<ProductResponse> result = productService.findAll("Furniture", pageable);
 
         assertEquals(1, result.getTotalElements());
         assertEquals("Desk", result.getContent().get(0).name());
-        verify(repository, never()).findByActiveTrue(any(Pageable.class));
+        verify(productRepository, never()).findByActiveTrue(any(Pageable.class));
     }
     
     @Test
     void findBySku_whenMissing_returnsEmpty() {
-        when(repository.findBySkuAndActiveTrue("NOPE")).thenReturn(Optional.empty());
+        when(productRepository.findBySkuAndActiveTrue("NOPE")).thenReturn(Optional.empty());
 
-        assertTrue(service.findBySku("NOPE").isEmpty());
+        assertTrue(productService.findBySku("NOPE").isEmpty());
+    }
+    
+    @Test
+    void reserveSucceedsWhenRepositoryUpdatesOneRow() {
+        when(productRepository.reserve("SKU-1001", 2)).thenReturn(1);
+
+        assertDoesNotThrow(() -> productService.reserve(List.of(new StockItem("SKU-1001", 2))));
+    }
+
+    @Test
+    void reserveThrowsInsufficientStockWhenNoRowUpdatedButProductExists() {
+        when(productRepository.reserve("SKU-1004", 1)).thenReturn(0);
+        when(productRepository.findBySkuAndActiveTrue("SKU-1004")).thenReturn(Optional.of(new Product()));
+
+        assertThrows(InsufficientStockException.class,
+            () -> productService.reserve(List.of(new StockItem("SKU-1004", 1))));
+    }
+    
+    @Test
+    void reserveThrowsNotFoundWhenSkuDoesNotExist() {
+        when(productRepository.reserve("SKU-9999", 1)).thenReturn(0);
+        when(productRepository.findBySkuAndActiveTrue("SKU-9999")).thenReturn(Optional.empty());
+
+        assertThrows(ProductNotFoundException.class,
+            () -> productService.reserve(List.of(new StockItem("SKU-9999", 1))));
+    }
+
+    @Test
+    void releaseThrowsWhenReleasingMoreThanReserved() {
+        when(productRepository.release("SKU-1001", 5)).thenReturn(0);
+        when(productRepository.findBySkuAndActiveTrue("SKU-1001")).thenReturn(Optional.of(new Product()));
+
+        assertThrows(InvalidReleaseException.class,
+            () -> productService.release(List.of(new StockItem("SKU-1001", 5))));
     }
 
     @Test
     void delete_whenMissing_returnsFalseAndDeletesNothing() {
-        when(repository.findByIdAndActiveTrue(99L)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndActiveTrue(99L)).thenReturn(Optional.empty());
 
-        boolean deleted = service.deleteProduct(99L);
+        boolean deleted = productService.deleteProduct(99L);
 
         assertFalse(deleted);
-        verify(repository, never()).save(any());
+        verify(productRepository, never()).save(any());
     }
     
     @Test
     void delete_whenExists_marksInactiveAndReturnsTrue() {
         Product laptop = new Product("SKU-1001", "Laptop", "Electronics", BigDecimal.valueOf(55000), 10);
-        when(repository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(laptop));
+        when(productRepository.findByIdAndActiveTrue(1L)).thenReturn(Optional.of(laptop));
 
-        boolean deleted = service.deleteProduct(1L);
+        boolean deleted = productService.deleteProduct(1L);
 
         assertTrue(deleted);
         assertFalse(laptop.isActive());
-        verify(repository).save(laptop);
+        verify(productRepository).save(laptop);
     }
 
 }

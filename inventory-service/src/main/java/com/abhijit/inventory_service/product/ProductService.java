@@ -11,6 +11,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import jakarta.transaction.Transactional;
+
 @Service
 public class ProductService {
 	
@@ -65,6 +67,32 @@ public class ProductService {
 				productRepository.save(product);
 				return true;
 				}).orElse(false);
+	}
+	
+	@Transactional
+	public void reserve(List<StockItem> items) {
+		for(StockItem item: items) {
+			int updated = productRepository.reserve(item.sku(), item.quantity());
+			if(updated == 0) {
+				if(productRepository.findBySkuAndActiveTrue(item.sku()).isEmpty()) {
+					throw new ProductNotFoundException(item.sku());
+				}
+				throw new InsufficientStockException(item.sku(), item.quantity());
+			}
+		}
+	}
+	
+	@Transactional
+	public void release(List<StockItem> items) {
+		for(StockItem item: items) {
+			int updated = productRepository.release(item.sku(), item.quantity());
+			if(updated == 0) {
+				if(productRepository.findBySkuAndActiveTrue(item.sku()).isEmpty()) {
+					throw new ProductNotFoundException(item.sku());
+				}
+				throw new InvalidReleaseException(item.sku(), item.quantity());
+			}
+		}
 	}
 
 }

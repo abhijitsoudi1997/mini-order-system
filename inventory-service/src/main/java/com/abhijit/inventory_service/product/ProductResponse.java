@@ -10,6 +10,8 @@ public record ProductResponse(
         @Schema(example = "Pen") String name,
         @Schema(example = "Stationery") String category,
         @Schema(example = "20.0") BigDecimal price,
-        @Schema(example = "500") int quantity) {
+        @Schema(example = "500") int quantity,
+        @Schema(example = "500")int reservedQuantity, 
+        @Schema(example = "500")int availableQuantity) {
 
 }
