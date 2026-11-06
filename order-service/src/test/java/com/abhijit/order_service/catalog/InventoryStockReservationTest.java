@@ -19,6 +19,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.abhijit.order_service.order.InsufficientStockException;
 import com.abhijit.order_service.order.InventoryUnavailableException;
+import com.abhijit.order_service.order.StockReleaseRejectedException;
 import com.abhijit.order_service.order.StockRequest;
 
 import feign.FeignException;
@@ -85,5 +86,13 @@ class InventoryStockReservationTest {
         reservation.release("ORD-1", lines);
 
         verify(client).release(any(StockRequest.class));
+    }
+    
+    @Test
+    void releaseOf404BecomesStockReleaseRejected() {
+        doThrow(new FeignException.NotFound("not found", dummyRequest(), null, null))
+                .when(client).release(any());
+
+        assertThrows(StockReleaseRejectedException.class, () -> reservation.release("ORD-1", lines));
     }
 }

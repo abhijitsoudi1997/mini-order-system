@@ -183,4 +183,15 @@ class OrderServiceTest {
         assertThrows(InventoryUnavailableException.class, () -> service.cancelOrder(1L));
         assertEquals(OrderStatus.CONFIRMED, order.getStatus());
     }
+    
+    @Test
+    void releaseIsAttemptedWhenReserveFailsBecauseInventoryIsUnavailable() {
+        doThrow(new InventoryUnavailableException("down", new RuntimeException()))
+                .when(stockReservation).reserve(anyString(), anyList());
+
+        assertThrows(InventoryUnavailableException.class,
+                () -> service.createOrder(request(new OrderItemRequest("SKU-1001", 1))));
+
+        verify(stockReservation).release(anyString(), anyList());
+    }
 }

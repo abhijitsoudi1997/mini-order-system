@@ -3,11 +3,14 @@ package com.abhijit.order_service.order;
 import java.util.List;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.abhijit.order_service.catalog.StockReservation;
+import com.abhijit.order_service.catalog.InventoryStockReservation;
 import com.abhijit.order_service.catalog.ProductCatalog;
 import com.abhijit.order_service.catalog.ProductInfo;
 import com.abhijit.order_service.catalog.StockLine;
@@ -22,6 +25,9 @@ public class OrderService {
 	private final OrderNumberGenerator numberGenerator;
 	private final ProductCatalog productCatalog;
 	private final StockReservation stockReservation;
+	
+    private static final Logger log = LoggerFactory.getLogger(InventoryStockReservation.class);
+
 	
 	public OrderService(OrderRepository orderRepository, OrderMapper mapper, 
 			OrderNumberGenerator numberGenerator, ProductCatalog productCatalog, StockReservation stockReservation) {
@@ -68,6 +74,11 @@ public class OrderService {
 			saved.confirm();
 		} catch(InsufficientStockException e) {
 			saved.fail(e.getMessage());
+		} catch (InventoryUnavailableException e) {
+		    // every retry failed, but Inventory may have reserved before the reply was lost:
+		    // try to give the stock back, then fail the request (the order is rolled back)
+		    releaseQuietly(saved.getOrderNumber(), lines);
+		    throw e;
 		}
 		
 		
@@ -91,6 +102,14 @@ public class OrderService {
 		order.cancel();
 		
 		return mapper.toResponse(order);
+	}
+	
+	private void releaseQuietly(String orderNumber, List<StockLine> lines) {
+	    try {
+	        stockReservation.release(orderNumber, lines);
+	    } catch (RuntimeException ex) {
+	        log.warn("Could not release stock for order {} after a failed reserve: {}", orderNumber, ex.getMessage());
+	    }
 	}
 
 }

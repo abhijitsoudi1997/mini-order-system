@@ -94,6 +94,12 @@ public class GlobalExceptionHandler {
 		return build(HttpStatus.CONFLICT, ex.getMessage(), request, List.of());
 	}
 	
+	@ExceptionHandler(StockReleaseRejectedException.class)
+	public ResponseEntity<ErrorResponse> handleStockReleaseRejected(StockReleaseRejectedException ex,
+			HttpServletRequest request) {
+		return build(HttpStatus.CONFLICT, ex.getMessage(), request, List.of());
+	}
+	
 	@ExceptionHandler(CallNotPermittedException.class)
 	public ResponseEntity<ErrorResponse> handleCircuitOpen(CallNotPermittedException ex, HttpServletRequest request) {
 		return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, List.of());
