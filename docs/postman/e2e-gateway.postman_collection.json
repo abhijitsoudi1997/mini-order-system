@@ -1,0 +1,1122 @@
+{
+  "info": {
+    "name": "mini-order-system E2E flow (via API gateway)",
+    "description": "End-to-end flow through the API gateway (8080). Start Eureka, Inventory, Order and the gateway, then run the whole collection (Run collection, or: newman run this file). Creates its own test product each run and cleans up at the end.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Inventory health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{inventoryUrl}}/actuator/health",
+          "host": [
+            "{{inventoryUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"status is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Order health",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{orderUrl}}/actuator/health",
+          "host": [
+            "{{orderUrl}}"
+          ],
+          "path": [
+            "actuator",
+            "health"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"status is UP\", () => pm.expect(pm.response.json().status).to.eql(\"UP\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Create test product (qty 5)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sku\": \"{{e2eSku}}\",\n  \"name\": \"E2E Widget\",\n  \"category\": \"E2E\",\n  \"price\": 100.0,\n  \"quantity\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// fresh data for every run, so the flow can be repeated",
+              "pm.collectionVariables.set(\"e2eSku\", \"SKU-E2E-\" + Date.now());",
+              "pm.collectionVariables.set(\"e2eEmail\", \"e2e-\" + Date.now() + \"@example.com\");"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+              "pm.test(\"Location header present\", () => pm.expect(pm.response.headers.has(\"Location\")).to.be.true);",
+              "const loc = pm.response.headers.get(\"Location\") || \"\";",
+              "pm.test(\"Location is a public gateway path, not an internal address\", () => {",
+              "  pm.expect(loc).to.not.include(\"8081\");",
+              "  pm.expect(loc.startsWith(\"/api/products/\")).to.be.true;",
+              "});",
+              "const p = pm.response.json();",
+              "pm.test(\"sku matches\", () => pm.expect(p.sku).to.eql(pm.collectionVariables.get(\"e2eSku\")));",
+              "pm.collectionVariables.set(\"productId\", p.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Product starts with nothing reserved",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products/sku/{{e2eSku}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products",
+            "sku",
+            "{{e2eSku}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"reservedQuantity is 0\", () => pm.expect(p.reservedQuantity).to.eql(0));",
+              "pm.test(\"availableQuantity is 5\", () => pm.expect(p.availableQuantity).to.eql(5));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Place order for 2 units -> CONFIRMED",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerName\": \"E2E Tester\",\n  \"customerEmail\": \"{{e2eEmail}}\",\n  \"customerPhone\": \"9876543210\",\n  \"shippingAddress\": {\n    \"line\": \"12 MG Road\",\n    \"city\": \"Mysore\",\n    \"state\": \"Karnataka\",\n    \"pincode\": \"570001\"\n  },\n  \"items\": [\n    {\n      \"sku\": \"{{e2eSku}}\",\n      \"quantity\": 2\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"201 Created\", () => pm.response.to.have.status(201));",
+              "pm.test(\"Location header present\", () => pm.expect(pm.response.headers.has(\"Location\")).to.be.true);",
+              "const loc = pm.response.headers.get(\"Location\") || \"\";",
+              "pm.test(\"Location is a public gateway path, not an internal address\", () => {",
+              "  pm.expect(loc).to.not.include(\"8081\");",
+              "  pm.expect(loc.startsWith(\"/api/orders/\")).to.be.true;",
+              "});",
+              "const o = pm.response.json();",
+              "pm.test(\"status is CONFIRMED\", () => pm.expect(o.status).to.eql(\"CONFIRMED\"));",
+              "pm.test(\"no failure reason\", () => pm.expect(o.failureReason == null).to.be.true);",
+              "pm.test(\"order number looks right\", () => pm.expect(o.orderNumber).to.match(/^ORD-/));",
+              "pm.test(\"total is 2 x 100.00\", () => pm.expect(Number(o.totalAmount)).to.eql(200));",
+              "pm.collectionVariables.set(\"orderId\", o.id);",
+              "pm.collectionVariables.set(\"orderNumber\", o.orderNumber);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Inventory now holds 2 for the order",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products/sku/{{e2eSku}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products",
+            "sku",
+            "{{e2eSku}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"reservedQuantity is 2\", () => pm.expect(p.reservedQuantity).to.eql(2));",
+              "pm.test(\"availableQuantity is 3\", () => pm.expect(p.availableQuantity).to.eql(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Order for 4 units (only 3 available) -> 409 FAILED",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerName\": \"E2E Tester\",\n  \"customerEmail\": \"{{e2eEmail}}\",\n  \"customerPhone\": \"9876543210\",\n  \"shippingAddress\": {\n    \"line\": \"12 MG Road\",\n    \"city\": \"Mysore\",\n    \"state\": \"Karnataka\",\n    \"pincode\": \"570001\"\n  },\n  \"items\": [\n    {\n      \"sku\": \"{{e2eSku}}\",\n      \"quantity\": 4\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"409 Conflict\", () => pm.response.to.have.status(409));",
+              "const o = pm.response.json();",
+              "pm.test(\"status is FAILED\", () => pm.expect(o.status).to.eql(\"FAILED\"));",
+              "pm.test(\"failure reason mentions stock\", () => pm.expect(o.failureReason).to.match(/stock/i));",
+              "pm.collectionVariables.set(\"failedOrderId\", o.id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Failed order reserved nothing",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products/sku/{{e2eSku}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products",
+            "sku",
+            "{{e2eSku}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"reservedQuantity is 2\", () => pm.expect(p.reservedQuantity).to.eql(2));",
+              "pm.test(\"availableQuantity is 3\", () => pm.expect(p.availableQuantity).to.eql(3));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Get confirmed order by id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders/{{orderId}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "{{orderId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const o = pm.response.json();",
+              "pm.test(\"status is CONFIRMED\", () => pm.expect(o.status).to.eql(\"CONFIRMED\"));",
+              "pm.test(\"order number matches\", () => pm.expect(o.orderNumber).to.eql(pm.collectionVariables.get(\"orderNumber\")));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Get order by order number",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders/number/{{orderNumber}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "number",
+            "{{orderNumber}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"same order\", () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get(\"orderId\")));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 List the customer's orders (2)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders?customerEmail={{e2eEmail}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ],
+          "query": [
+            {
+              "key": "customerEmail",
+              "value": "{{e2eEmail}}"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const total = body.page ? body.page.totalElements : body.totalElements;",
+              "pm.test(\"two orders: one CONFIRMED, one FAILED\", () => pm.expect(total).to.eql(2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Unknown SKU -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerName\": \"E2E Tester\",\n  \"customerEmail\": \"{{e2eEmail}}\",\n  \"customerPhone\": \"9876543210\",\n  \"shippingAddress\": {\n    \"line\": \"12 MG Road\",\n    \"city\": \"Mysore\",\n    \"state\": \"Karnataka\",\n    \"pincode\": \"570001\"\n  },\n  \"items\": [\n    {\n      \"sku\": \"SKU-DOES-NOT-EXIST\",\n      \"quantity\": 1\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 Invalid order body -> 400",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"customerName\": \"E2E Tester\",\n  \"customerEmail\": \"{{e2eEmail}}\",\n  \"customerPhone\": \"9876543210\",\n  \"shippingAddress\": {\n    \"line\": \"12 MG Road\",\n    \"city\": \"Mysore\",\n    \"state\": \"Karnataka\",\n    \"pincode\": \"123\"\n  },\n  \"items\": []\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"400 Bad Request\", () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Change the product price to 150",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products/{{productId}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products",
+            "{{productId}}"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sku\": \"{{e2eSku}}\",\n  \"name\": \"E2E Widget\",\n  \"category\": \"E2E\",\n  \"price\": 150.0,\n  \"quantity\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"price is now 150\", () => pm.expect(Number(pm.response.json().price)).to.eql(150));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 Old order keeps its old price (snapshot)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders/{{orderId}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "{{orderId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"total is still 200\", () => pm.expect(Number(pm.response.json().totalAmount)).to.eql(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 Cancel the confirmed order",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders/{{orderId}}/cancel",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "{{orderId}}",
+            "cancel"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"status is CANCELLED\", () => pm.expect(pm.response.json().status).to.eql(\"CANCELLED\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 Stock was released",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products/sku/{{e2eSku}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products",
+            "sku",
+            "{{e2eSku}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"reservedQuantity is 0\", () => pm.expect(p.reservedQuantity).to.eql(0));",
+              "pm.test(\"availableQuantity is 5\", () => pm.expect(p.availableQuantity).to.eql(5));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 Cancel the same order again -> 409",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders/{{orderId}}/cancel",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "{{orderId}}",
+            "cancel"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"409 Conflict\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 Cancel the FAILED order -> 409",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders/{{failedOrderId}}/cancel",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "{{failedOrderId}}",
+            "cancel"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"409 Conflict\", () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 Cancel an unknown order -> 404",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/orders/999999/cancel",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "orders",
+            "999999",
+            "cancel"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 Reserve directly in Inventory",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{inventoryUrl}}/inventory/reserve",
+          "host": [
+            "{{inventoryUrl}}"
+          ],
+          "path": [
+            "inventory",
+            "reserve"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderNumber\": \"E2E-DIRECT-{{e2eSku}}\",\n  \"items\": [\n    {\n      \"sku\": \"{{e2eSku}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"status is RESERVED\", () => pm.expect(pm.response.json().status).to.eql(\"RESERVED\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 Same reserve again (idempotent) -> 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{inventoryUrl}}/inventory/reserve",
+          "host": [
+            "{{inventoryUrl}}"
+          ],
+          "path": [
+            "inventory",
+            "reserve"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderNumber\": \"E2E-DIRECT-{{e2eSku}}\",\n  \"items\": [\n    {\n      \"sku\": \"{{e2eSku}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 Only 1 is held, not 2",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products/sku/{{e2eSku}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products",
+            "sku",
+            "{{e2eSku}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"reservedQuantity is 1\", () => pm.expect(p.reservedQuantity).to.eql(1));",
+              "pm.test(\"availableQuantity is 4\", () => pm.expect(p.availableQuantity).to.eql(4));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24 Release directly in Inventory",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{inventoryUrl}}/inventory/release",
+          "host": [
+            "{{inventoryUrl}}"
+          ],
+          "path": [
+            "inventory",
+            "release"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderNumber\": \"E2E-DIRECT-{{e2eSku}}\",\n  \"items\": [\n    {\n      \"sku\": \"{{e2eSku}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "pm.test(\"status is RELEASED\", () => pm.expect(pm.response.json().status).to.eql(\"RELEASED\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25 Same release again (idempotent) -> 200",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{inventoryUrl}}/inventory/release",
+          "host": [
+            "{{inventoryUrl}}"
+          ],
+          "path": [
+            "inventory",
+            "release"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderNumber\": \"E2E-DIRECT-{{e2eSku}}\",\n  \"items\": [\n    {\n      \"sku\": \"{{e2eSku}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "26 Nothing held, and never below zero",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products/sku/{{e2eSku}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products",
+            "sku",
+            "{{e2eSku}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"200 OK\", () => pm.response.to.have.status(200));",
+              "const p = pm.response.json();",
+              "pm.test(\"reservedQuantity is 0\", () => pm.expect(p.reservedQuantity).to.eql(0));",
+              "pm.test(\"availableQuantity is 5\", () => pm.expect(p.availableQuantity).to.eql(5));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "27 Clean up: delete the test product",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products/{{productId}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products",
+            "{{productId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"204 No Content\", () => pm.response.to.have.status(204));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "28 Deleted product is gone -> 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/products/sku/{{e2eSku}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "products",
+            "sku",
+            "{{e2eSku}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "29 Internal reserve endpoint is not exposed by the gateway -> 404",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{gatewayUrl}}/api/inventory/reserve",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "api",
+            "inventory",
+            "reserve"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderNumber\": \"E2E-DIRECT-{{e2eSku}}\",\n  \"items\": [\n    {\n      \"sku\": \"{{e2eSku}}\",\n      \"quantity\": 1\n    }\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "30 Path without /api matches no route -> 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayUrl}}/products/sku/{{e2eSku}}",
+          "host": [
+            "{{gatewayUrl}}"
+          ],
+          "path": [
+            "products",
+            "sku",
+            "{{e2eSku}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"404 Not Found\", () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "gatewayUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "inventoryUrl",
+      "value": "http://localhost:8081"
+    },
+    {
+      "key": "orderUrl",
+      "value": "http://localhost:8082"
+    }
+  ]
+}
