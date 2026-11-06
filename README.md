@@ -2,16 +2,21 @@
 
 A small order management system built with **Spring Boot microservices**, inspired by my experience with IBM Sterling Order Management (OMS). The goal is to rebuild the core order flow (products, stock, orders) as independent services that talk to each other.
 
-> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. API Gateway, security and Docker are on the roadmap below.
+> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. An API Gateway is the single entry point for clients. Security and Docker are on the roadmap below.
 
 ## Architecture
 
 ```
- Client (Postman/browser) --> [ API Gateway ]  (planned)
-                                     |
-               +---------------------+---------------------+
-               |                                           |
-    +----------v-----------+   inventory-service   +--------v-------------+
+ Client (Postman/browser)
+          |  http://localhost:8080/api/...
+          v
+ +----------------------+
+ | API Gateway (8080)   |  routes by service name (lb://...)
+ +-----+-----------+----+
+       |           |
+       | /api/products/**         /api/orders/**
+       v                               v
+    +----------------------+   inventory-service   +----------------------+
     | Inventory Service    | <-------------------- | Order Service        |
     | (8081)               |  OpenFeign + load     | (8082)               |
     +----------+-----------+  balancer, by name    +--------+-------------+
@@ -19,8 +24,8 @@ A small order management system built with **Spring Boot microservices**, inspir
                +---------------------+----------------------+
                                      v
                             +------------------+
-                            | Eureka server    |
-                            | (8761)           |
+                            | Eureka server    |  (the gateway registers and
+                            | (8761)           |   looks up services here too)
                             +------------------+
 ```
 
@@ -28,10 +33,10 @@ A small order management system built with **Spring Boot microservices**, inspir
 |---|---|---|
 | inventory-service | 8081 | Done (product CRUD, MySQL, validation, tests, Swagger) |
 | order-service | 8082 | Done (orders, order lines, calls Inventory via OpenFeign, validation, tests) |
-| api-gateway | 8080 | Planned |
+| api-gateway | 8080 | Done (routes by service name, Location rewrite, correlation id, timeouts, tests) |
 | discovery-server (Eureka, service discovery) | 8761 | Done (registry and dashboard) |
 
-Each service owns its own database (`inventory_db`, `order_db`). Services find each other through Eureka and call each other over REST. Docker Compose is planned.
+Each service owns its own database (`inventory_db`, `order_db`). Services find each other through Eureka and call each other over REST. Clients use the gateway. Docker Compose is planned.
 
 ## Tech stack
 
@@ -43,7 +48,8 @@ Each service owns its own database (`inventory_db`, `order_db`). Services find e
 - Spring Cloud OpenFeign (service-to-service calls)
 - JUnit 5, Mockito, MockMvc
 - Resilience4j (retry and circuit breaker)
-- Planned: Spring Cloud (Eureka, Gateway), Docker and Docker Compose
+- Spring Cloud Netflix Eureka (service discovery) and Spring Cloud Gateway (reactive, WebFlux)
+- Planned: Security, Docker and Docker Compose
 
 ## Inventory Service
 
@@ -232,6 +238,24 @@ Failure behaviour:
 - **The Eureka server is stopped:** running services keep working, because each client keeps a local copy of the registry. They re-register when the server returns.
 - **A clean shutdown** deregisters the instance at once, while a hard kill leaves it in the registry until its lease expires.
 
+## API Gateway
+
+The `api-gateway` project (Spring Cloud Gateway, port 8080) is the single entry point. It registers with Eureka and forwards requests to the services **by service name** (`lb://inventory-service`, `lb://order-service`), so it does not know any service port.
+
+| Public URL | Forwarded to |
+|---|---|
+| `http://localhost:8080/api/products/**` | inventory-service `/products/**` |
+| `http://localhost:8080/api/orders/**` | order-service `/orders/**` |
+
+The `/api` prefix is removed by the gateway (`StripPrefix=1`), so the services keep their own paths.
+
+- **Only the public endpoints are routed.** `/inventory/reserve`, `/inventory/release` and the actuator endpoints of the services are internal. They are not reachable through the gateway (404). Routes are listed explicitly, not generated automatically from the registry, so a new service is never exposed by accident.
+- **`Location` header:** a created resource is returned with a public path such as `/api/products/12`, not the internal `http://localhost:8081/...` address (`RewriteResponseHeader` on both routes).
+- **Correlation id:** a global filter adds an `X-Correlation-Id` to every request. A valid id sent by the client is kept, otherwise a UUID is generated. The id is forwarded to the services, returned in the response and logged by the gateway.
+- **Timeouts:** 2 s to connect, 10 s for a response. A service that does not answer in time gives the client a 504, a stopped service gives 503, and a path with no route gives 404.
+
+Routes are defined in `api-gateway/src/main/resources/application.properties` under `spring.cloud.gateway.server.webflux.routes`. The routes can be inspected at `http://localhost:8080/actuator/gateway/routes`.
+
 ## Run locally
 
 Requirements: Java 17 or newer and MySQL. Maven is not needed because each service includes the Maven Wrapper.
@@ -263,7 +287,7 @@ export ORDER_DB_PASSWORD='choose-another-password'  # order-service
 
 ### 3. Start the services
 
-Start the **Eureka server first** (port 8761), then Inventory (8081), then Order (8082), each in its own terminal. The Eureka dashboard at http://localhost:8761 shows both services once they have registered (up to about 40 seconds):
+Start the **Eureka server first** (port 8761), then Inventory (8081), Order (8082) and the API Gateway (8080), each in its own terminal. The Eureka dashboard at http://localhost:8761 shows the services once they have registered (about 10 seconds with the local timers; wait before the first request):
 
 ```
 git clone https://github.com/abhijitsoudi1997/mini-order-system.git
@@ -278,6 +302,12 @@ cd mini-order-system/inventory-service
 cd mini-order-system/order-service
 ./mvnw spring-boot:run
 ```
+```
+cd mini-order-system/api-gateway
+./mvnw spring-boot:run
+```
+
+Then use the gateway, for example `curl http://localhost:8080/api/products/sku/SKU-1001`.
 
 Ready-made Postman collections for both services are in `docs/postman/` (see "End-to-end flow" below).
 
@@ -301,12 +331,14 @@ Select one with `spring.profiles.active` in `application.properties`, or at run 
 ```
 cd inventory-service && ./mvnw test
 cd order-service && ./mvnw test
+cd api-gateway && ./mvnw test
 ```
 
-The tests do not need MySQL or a running Inventory Service. Integration tests run with the `test` profile against an in-memory H2 database, and the Order Service uses a stub product catalog in that profile.
+The tests do not need MySQL, Eureka or a running service. Integration tests run with the `test` profile against an in-memory H2 database, and the Order Service uses a stub product catalog in that profile.
 
 - Inventory Service: `ProductServiceTest` (Mockito), `ProductMapperTest`, `ProductApiTest` (MockMvc against the real controllers, validation and error handler), `ProductReservationTest` (atomic reserve and release against H2), `ReservationServiceTest` (idempotency rules), `StockApiTest` (reserve and release endpoints, all-or-nothing, repeat-safe)
 - Order Service: `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest` (Mockito, mocked stock reservation), `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (CONFIRMED and FAILED outcomes), `OrderCancelApiTest`, `InventoryProductCatalogTest` and `InventoryStockReservationTest` (Mockito, mocked Feign client), `InventoryClientTest` (the client is found by service name, not a fixed URL), `ResilienceIntegrationTest` (retry and circuit breaker in a real Spring context with a mocked Feign client). The Eureka client is switched off in the test profiles, so no test needs a running registry
+- API Gateway: `CorrelationIdFilterTest` (id generated, kept, replaced when invalid or too long, runs first) and `RoutesTest` (exactly two routes, each goes to the right service name, internal and unprefixed paths match no route)
 
 ## End-to-end flow (Postman)
 
@@ -315,15 +347,17 @@ Two collections live in `docs/postman/`:
 | File | Purpose |
 |---|---|
 | `mini-order-system.postman_collection.json` | Every request for both services, for manual exploration |
-| `e2e-flow.postman_collection.json` | An automated end-to-end flow with checks on every request (28 requests) |
+| `e2e-flow.postman_collection.json` | An automated end-to-end flow directly against the services, with checks on every request (28 requests) |
+| `e2e-gateway.postman_collection.json` | The same flow through the API gateway (30 requests): public calls use `http://localhost:8080/api/...`, and it also checks that internal endpoints are not exposed and that `Location` is a public path |
 
-Start MySQL, then Inventory (8081) and Order (8082), then in Postman choose **Import** and select `e2e-flow.postman_collection.json`, open the collection and press **Run**. Or from a terminal (needs Node.js):
+Start MySQL, then Eureka, Inventory (8081) and Order (8082) (and the gateway on 8080 for the gateway collection), then in Postman choose **Import** and select `e2e-flow.postman_collection.json`, open the collection and press **Run**. Or from a terminal (needs Node.js):
 
 ```
 npx newman run docs/postman/e2e-flow.postman_collection.json
+npx newman run docs/postman/e2e-gateway.postman_collection.json
 ```
 
-Each run creates its own test product and customer, so it can be repeated, and it deletes the product at the end. The base URLs are collection variables (`inventoryUrl`, `orderUrl`), so only those two values change when an API Gateway is added.
+Each run creates its own test product and customer, so it can be repeated, and it deletes the product at the end. The base URLs are collection variables (`inventoryUrl`, `orderUrl`, and `gatewayUrl` in the gateway collection). Health checks and the internal reserve and release calls always go straight to the services.
 
 What the flow checks:
 
@@ -356,7 +390,7 @@ Failure behaviour (stopping or freezing Inventory, the circuit breaker opening a
 - [x] Resilience4j (retry, circuit breaker) and idempotent reserve and release
 - [x] End-to-end flow documented and automated (Postman collection with tests)
 - [x] Service discovery (Eureka) and lookup by service name
-- [ ] API Gateway
+- [x] API Gateway (routes by service name, Location rewrite, correlation id, timeouts)
 - [ ] Security
 - [ ] Docker and Docker Compose
 
