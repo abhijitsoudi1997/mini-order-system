@@ -250,7 +250,7 @@ cd mini-order-system/order-service
 ./mvnw spring-boot:run
 ```
 
-A ready-made Postman collection for both services is in `docs/postman/`.
+Ready-made Postman collections for both services are in `docs/postman/` (see "End-to-end flow" below).
 
 ### Profiles
 
@@ -279,6 +279,38 @@ The tests do not need MySQL or a running Inventory Service. Integration tests ru
 - Inventory Service: `ProductServiceTest` (Mockito), `ProductMapperTest`, `ProductApiTest` (MockMvc against the real controllers, validation and error handler), `ProductReservationTest` (atomic reserve and release against H2), `ReservationServiceTest` (idempotency rules), `StockApiTest` (reserve and release endpoints, all-or-nothing, repeat-safe)
 - Order Service: `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest` (Mockito, mocked stock reservation), `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (CONFIRMED and FAILED outcomes), `OrderCancelApiTest`, `InventoryProductCatalogTest` and `InventoryStockReservationTest` (Mockito, mocked Feign client), `ResilienceIntegrationTest` (retry and circuit breaker in a real Spring context with a mocked Feign client)
 
+## End-to-end flow (Postman)
+
+Two collections live in `docs/postman/`:
+
+| File | Purpose |
+|---|---|
+| `mini-order-system.postman_collection.json` | Every request for both services, for manual exploration |
+| `e2e-flow.postman_collection.json` | An automated end-to-end flow with checks on every request (28 requests) |
+
+Start MySQL, then Inventory (8081) and Order (8082), then in Postman choose **Import** and select `e2e-flow.postman_collection.json`, open the collection and press **Run**. Or from a terminal (needs Node.js):
+
+```
+npx newman run docs/postman/e2e-flow.postman_collection.json
+```
+
+Each run creates its own test product and customer, so it can be repeated, and it deletes the product at the end. The base URLs are collection variables (`inventoryUrl`, `orderUrl`), so only those two values change when an API Gateway is added.
+
+What the flow checks:
+
+1. Both services are healthy.
+2. A product is created with 5 in stock and nothing reserved.
+3. An order for 2 units is **CONFIRMED**, and Inventory now shows 2 reserved and 3 available.
+4. An order for 4 units (only 3 available) is saved as **FAILED** with a failure reason and returns 409. It reserves nothing.
+5. The orders can be read by id, by order number and by customer email.
+6. An unknown SKU and an invalid body both return 400.
+7. A price change in Inventory does not change the total of an existing order (price snapshot).
+8. Cancelling the confirmed order gives **CANCELLED** and releases the stock. Cancelling again, cancelling a failed order and cancelling an unknown order return 409, 409 and 404.
+9. Reserve and release in Inventory are idempotent: sending the same request twice changes the stock once, and it never goes below zero.
+10. The test product is deleted and then returns 404.
+
+Failure behaviour (stopping or freezing Inventory, the circuit breaker opening and closing) needs a service to be stopped, so it is checked by hand. See the Resilience section above and `/actuator/circuitbreakers`.
+
 ## Roadmap
 
 - [x] Inventory Service: product CRUD
@@ -293,6 +325,7 @@ The tests do not need MySQL or a running Inventory Service. Integration tests ru
 - [x] Service-to-service call (OpenFeign), stock check, error handling
 - [x] Stock reservation (reserve, release, confirm, cancel)
 - [x] Resilience4j (retry, circuit breaker) and idempotent reserve and release
+- [x] End-to-end flow documented and automated (Postman collection with tests)
 - [ ] Service discovery (Eureka), API Gateway
 - [ ] Security
 - [ ] Docker and Docker Compose
