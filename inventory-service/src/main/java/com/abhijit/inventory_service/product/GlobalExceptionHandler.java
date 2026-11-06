@@ -20,7 +20,7 @@ public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
     
     @ExceptionHandler(ProductNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleNotFound(ProductNotFoundException ex) {
+    public ResponseEntity<ErrorResponse> handleProductNotFound(ProductNotFoundException ex) {
         return build(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage(), List.of());
     }
     
@@ -59,6 +59,16 @@ public class GlobalExceptionHandler {
     	return build(HttpStatus.CONFLICT, "Conflict", ex.getMessage(), List.of());
     }
 
+    @ExceptionHandler(ReservationConflictException.class)
+    public ResponseEntity<ErrorResponse> handleReservationConflict(ReservationConflictException ex) {
+        return build(HttpStatus.CONFLICT, "Conflict", ex.getMessage(), List.of());
+    }
+    
+    @ExceptionHandler(ReservationNotFoundException.class)
+    public ResponseEntity<ErrorResponse> handleReservationNotFound(ReservationNotFoundException ex) {
+        return build(HttpStatus.NOT_FOUND, "Not Found", ex.getMessage(), List.of());
+    }
+    
     private ResponseEntity<ErrorResponse> build(HttpStatus status, String error,
                                                 String message, List<String> details) {
         ErrorResponse body = new ErrorResponse(status.value(), error, message, details, LocalDateTime.now());

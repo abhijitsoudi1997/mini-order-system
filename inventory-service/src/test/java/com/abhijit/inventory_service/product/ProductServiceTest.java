@@ -24,11 +24,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
-import com.abhijit.inventory_service.product.Product;
-import com.abhijit.inventory_service.product.ProductMapper;
-import com.abhijit.inventory_service.product.ProductRepository;
-import com.abhijit.inventory_service.product.ProductResponse;
-import com.abhijit.inventory_service.product.ProductService;
+
 
 @ExtendWith(MockitoExtension.class)
 public class ProductServiceTest {

@@ -13,23 +13,23 @@ import jakarta.validation.Valid;
 @RequestMapping("/inventory")
 public class StockController {
 	
-	private final ProductService productService;
+	private final ReservationService reservationService;
 	
-	public StockController(ProductService productService) {
-		this.productService = productService;
+	public StockController(ReservationService reservationService) {
+		this.reservationService = reservationService;
 	}
 	
 	@PostMapping("/reserve")
 	public StockResponse reserve(@Valid @RequestBody StockRequest request) {
 		
-		productService.reserve(toStockItems(request));
+		reservationService.reserve(request.orderNumber(), toStockItems(request));
 		return new StockResponse(request.orderNumber(), "RESERVED", request.items());
 	}
 	
 	@PostMapping("/release")
 	public StockResponse release(@Valid @RequestBody StockRequest request) {
 		
-		productService.release(toStockItems(request));
+		reservationService.release(request.orderNumber());
 		return new StockResponse(request.orderNumber(), "RELEASED", request.items());
 	}
 	

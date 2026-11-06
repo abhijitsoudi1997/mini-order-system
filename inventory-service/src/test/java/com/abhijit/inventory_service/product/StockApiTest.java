@@ -32,7 +32,10 @@ public class StockApiTest {
     private WebApplicationContext context;
 
     @Autowired
-    private ProductRepository repository;
+    private ProductRepository productRepository;
+    
+    @Autowired
+    private ReservationRepository reservationRepository;
 
     private MockMvc mockMvc;
     private final List<Product> created = new ArrayList<>();
@@ -44,7 +47,8 @@ public class StockApiTest {
 
     @AfterEach
     void cleanUp() {
-        repository.deleteAll(created);   // only delete what this test created
+    	reservationRepository.deleteAll();
+        productRepository.deleteAll(created);   // only delete what this test created
         created.clear();
     }
 
@@ -55,7 +59,7 @@ public class StockApiTest {
         p.setCategory("Test");
         p.setPrice(new BigDecimal("10.00"));
         p.setQuantity(quantity);
-        Product saved = repository.save(p);
+        Product saved = productRepository.save(p);
         created.add(saved);
         return saved;
     }
@@ -124,7 +128,7 @@ public class StockApiTest {
     }
 
     @Test
-    void releaseGivesStockBack() throws Exception {
+    void releaseGivesBackTheWholeReservation() throws Exception {
         saveProduct("SKU-STK-5", 5);
 
         mockMvc.perform(post("/inventory/reserve")
@@ -134,23 +138,21 @@ public class StockApiTest {
 
         mockMvc.perform(post("/inventory/release")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(stockJson("ORD-T-5", "SKU-STK-5:2")))
+                .content(stockJson("ORD-T-5", "SKU-STK-5:3")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("RELEASED"));
 
         mockMvc.perform(get("/products/sku/SKU-STK-5"))
-            .andExpect(jsonPath("$.reservedQuantity").value(1))
-            .andExpect(jsonPath("$.availableQuantity").value(4));
+            .andExpect(jsonPath("$.reservedQuantity").value(0))
+            .andExpect(jsonPath("$.availableQuantity").value(5));
     }
 
     @Test
-    void releaseMoreThanReservedReturns409() throws Exception {
-        saveProduct("SKU-STK-6", 5);
-
+    void releaseOfUnknownOrderReturns404() throws Exception {
         mockMvc.perform(post("/inventory/release")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(stockJson("ORD-T-6", "SKU-STK-6:1")))   // nothing reserved yet
-            .andExpect(status().isConflict());
+                .content(stockJson("ORD-T-6", "SKU-STK-6:1")))
+            .andExpect(status().isNotFound());
     }
 
     @Test
@@ -164,6 +166,49 @@ public class StockApiTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(stockJson("ORD-T-7", "SKU-STK-7:0")))   // quantity must be > 0
             .andExpect(status().isBadRequest());
+    }
+    
+    @Test
+    void reservingTheSameOrderTwiceReservesOnlyOnce() throws Exception {
+        saveProduct("SKU-STK-8", 5);
+        String body = stockJson("ORD-IDEM-1", "SKU-STK-8:2");
+
+        mockMvc.perform(post("/inventory/reserve").contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isOk());
+        mockMvc.perform(post("/inventory/reserve").contentType(MediaType.APPLICATION_JSON).content(body))
+            .andExpect(status().isOk());                                    // the repeat is accepted
+
+        mockMvc.perform(get("/products/sku/SKU-STK-8"))
+            .andExpect(jsonPath("$.reservedQuantity").value(2));            // but only 2 are held, not 4
+    }
+
+    @Test
+    void sameOrderNumberWithDifferentItemsReturns409() throws Exception {
+        saveProduct("SKU-STK-9", 5);
+
+        mockMvc.perform(post("/inventory/reserve").contentType(MediaType.APPLICATION_JSON)
+                .content(stockJson("ORD-IDEM-2", "SKU-STK-9:2")))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/inventory/reserve").contentType(MediaType.APPLICATION_JSON)
+                .content(stockJson("ORD-IDEM-2", "SKU-STK-9:3")))
+            .andExpect(status().isConflict());
+    }
+
+    @Test
+    void releasingTwiceIsHarmless() throws Exception {
+        saveProduct("SKU-STK-10", 5);
+        String reserve = stockJson("ORD-IDEM-3", "SKU-STK-10:2");
+
+        mockMvc.perform(post("/inventory/reserve").contentType(MediaType.APPLICATION_JSON).content(reserve))
+            .andExpect(status().isOk());
+        mockMvc.perform(post("/inventory/release").contentType(MediaType.APPLICATION_JSON).content(reserve))
+            .andExpect(status().isOk());
+        mockMvc.perform(post("/inventory/release").contentType(MediaType.APPLICATION_JSON).content(reserve))
+            .andExpect(status().isOk());                                    // second release: no error
+
+        mockMvc.perform(get("/products/sku/SKU-STK-10"))
+            .andExpect(jsonPath("$.reservedQuantity").value(0));            // and not -2
     }
 
 }
