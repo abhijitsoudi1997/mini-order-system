@@ -2,7 +2,7 @@
 
 A small order management system built with **Spring Boot microservices**, inspired by my experience with IBM Sterling Order Management (OMS). The goal is to rebuild the core order flow (products, stock, orders) as independent services that talk to each other.
 
-> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including stock reservation. Service discovery, API Gateway, resilience and security are on the roadmap below.
+> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery, API Gateway, security and Docker are on the roadmap below.
 
 ## Architecture
 
@@ -39,7 +39,8 @@ Each service owns its own database (`inventory_db`, `order_db`). Services call e
 - springdoc-openapi (Swagger UI)
 - Spring Cloud OpenFeign (service-to-service calls)
 - JUnit 5, Mockito, MockMvc
-- Planned: Spring Cloud (Eureka, Gateway, Resilience4j), Docker and Docker Compose
+- Resilience4j (retry and circuit breaker)
+- Planned: Spring Cloud (Eureka, Gateway), Docker and Docker Compose
 
 ## Inventory Service
 
@@ -56,8 +57,8 @@ Manages the product catalogue. Products are stored in MySQL. Deleting a product 
 | POST | `/products` | Create a product | 201 with a `Location` header (400 invalid, 409 duplicate SKU) |
 | PUT | `/products/{id}` | Replace a product | 200 (400 invalid, 404 if not found) |
 | DELETE | `/products/{id}` | Soft delete a product | 204 (404 if not found) |
-| POST | `/inventory/reserve` | Reserve stock for an order (all items or none) | 200 (400 invalid, 404 unknown SKU, 409 not enough stock) |
-| POST | `/inventory/release` | Release reserved stock | 200 (400 invalid, 404 unknown SKU, 409 more than reserved) |
+| POST | `/inventory/reserve` | Reserve stock for an order (all items or none, safe to repeat for the same order number) | 200 (400 invalid, 404 unknown SKU, 409 not enough stock, order number reused with different items, or already released) |
+| POST | `/inventory/release` | Release everything reserved for an order number (safe to repeat) | 200 (400 invalid, 404 no reservation for that order) |
 | GET | `/hello` | Returns the configured welcome message | 200 |
 | GET | `/actuator/health` | Health check | 200 |
 
@@ -136,6 +137,8 @@ curl -X DELETE http://localhost:8081/products/6
 
 Reserving is **atomic and all-or-nothing**. Each item is one conditional SQL `UPDATE ... WHERE quantity - reserved_quantity >= :qty`, so two orders competing for the last unit can never oversell. If any item cannot be reserved, the whole call is rolled back.
 
+Reservations are **idempotent per order number**. Each successful reserve stores a reservation record (`stock_reservation` and `stock_reservation_line` tables). Sending the same reserve again does nothing (the stock is already held), and releasing twice is harmless. This is what makes it safe for the Order Service to retry after a lost reply. Reusing an order number with different items, or after it was released, returns 409. Release gives back exactly what was stored for that order.
+
 ## Order Service
 
 Creates and reads orders. When an order is placed, the service calls the Inventory Service for each SKU (name, price, stock) and stores a **snapshot** of the name and unit price on each order line, so later price changes never rewrite old orders. The service has its own database (`order_db`).
@@ -187,6 +190,22 @@ CREATED --reserve ok--> CONFIRMED --cancel (stock released)--> CANCELLED
 ```
 
 If Inventory is unreachable, the request fails with 503 and nothing is saved.
+
+### Resilience (Resilience4j)
+
+All calls from Order to Inventory share one circuit breaker named `inventory`.
+
+| Call | Retry | Circuit breaker |
+|---|---|---|
+| Product lookup (`GET /products/sku/{sku}`) | up to 3 attempts, 500 ms apart | yes |
+| Reserve (`POST /inventory/reserve`) | up to 3 attempts (safe: reserve is idempotent per order number) | yes |
+| Release (`POST /inventory/release`) | up to 3 attempts (safe: release is idempotent) | yes |
+
+Only "Inventory unreachable or 5xx" is retried and counted as a failure. Business answers (404 unknown SKU, 409 not enough stock) are final and never retried.
+
+Circuit breaker: it looks at the last 10 calls, opens when at least 5 calls were made and half of them failed, stays open for 10 s, then lets 2 trial calls through. While it is open, requests fail immediately with 503. If every retry of a reserve fails, Order makes a best-effort release in case Inventory reserved before the reply was lost.
+
+State is visible at `/actuator/circuitbreakers`, `/actuator/retries` and `/actuator/health`. The settings live under `resilience4j.*` in `order-service/src/main/resources/application.properties`.
 
 ## Run locally
 
@@ -257,8 +276,8 @@ cd order-service && ./mvnw test
 
 The tests do not need MySQL or a running Inventory Service. Integration tests run with the `test` profile against an in-memory H2 database, and the Order Service uses a stub product catalog in that profile.
 
-- Inventory Service: `ProductServiceTest` (Mockito), `ProductMapperTest`, `ProductApiTest` (MockMvc against the real controllers, validation and error handler), `ProductReservationTest` (atomic reserve and release against H2), `StockApiTest` (reserve and release endpoints, all-or-nothing)
-- Order Service: `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest` (Mockito, mocked stock reservation), `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (CONFIRMED and FAILED outcomes), `OrderCancelApiTest`, `InventoryProductCatalogTest` and `InventoryStockReservationTest` (Mockito, mocked Feign client)
+- Inventory Service: `ProductServiceTest` (Mockito), `ProductMapperTest`, `ProductApiTest` (MockMvc against the real controllers, validation and error handler), `ProductReservationTest` (atomic reserve and release against H2), `ReservationServiceTest` (idempotency rules), `StockApiTest` (reserve and release endpoints, all-or-nothing, repeat-safe)
+- Order Service: `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest` (Mockito, mocked stock reservation), `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (CONFIRMED and FAILED outcomes), `OrderCancelApiTest`, `InventoryProductCatalogTest` and `InventoryStockReservationTest` (Mockito, mocked Feign client), `ResilienceIntegrationTest` (retry and circuit breaker in a real Spring context with a mocked Feign client)
 
 ## Roadmap
 
@@ -273,7 +292,7 @@ The tests do not need MySQL or a running Inventory Service. Integration tests ru
 - [x] Order Service with orders and order lines
 - [x] Service-to-service call (OpenFeign), stock check, error handling
 - [x] Stock reservation (reserve, release, confirm, cancel)
-- [ ] Resilience4j (retry, circuit breaker)
+- [x] Resilience4j (retry, circuit breaker) and idempotent reserve and release
 - [ ] Service discovery (Eureka), API Gateway
 - [ ] Security
 - [ ] Docker and Docker Compose

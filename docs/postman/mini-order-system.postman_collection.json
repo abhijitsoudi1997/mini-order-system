@@ -173,7 +173,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"orderNumber\": \"ORD-MANUAL-1\",\n    \"items\": [\n        {\n            \"sku\": \"SKU-1001\",\n            \"quantity\": 2\n        }\n    ]\n}",
+              "raw": "{\n    \"orderNumber\": \"ORD-MANUAL-10\",\n    \"items\": [\n        {\n            \"sku\": \"SKU-1001\",\n            \"quantity\": 3\n        }\n    ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -200,7 +200,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"orderNumber\": \"ORD-MANUAL-1\",\n    \"items\": [\n        {\n            \"sku\": \"SKU-1001\",\n            \"quantity\": 2\n        }\n    ]\n}",
+              "raw": "{\n    \"orderNumber\": \"ORD-MANUAL-10\",\n    \"items\": [\n        {\n            \"sku\": \"SKU-1001\",\n            \"quantity\": 2\n        }\n    ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -232,7 +232,7 @@
             "header": [],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"customerName\": \"Abhijit Soudi\",\n    \"customerEmail\": \"abhijit@example.com\",\n    \"customerPhone\": \"9876543210\",\n    \"shippingAddress\": {\n        \"line\": \"12 MG Road\",\n        \"city\": \"Mysore\",\n        \"state\": \"Karnataka\",\n        \"pincode\": \"570001\"\n    },\n    \"items\": [\n        {\n            \"sku\": \"SKU-1001\",\n            \"quantity\": 1\n        },\n        {\n            \"sku\": \"SKU-1002\",\n            \"quantity\": 2\n        }\n    ]\n}",
+              "raw": "{\n    \"customerName\": \"Abhijit Soudi\",\n    \"customerEmail\": \"abhijit@example.com\",\n    \"customerPhone\": \"9876543210\",\n    \"shippingAddress\": {\n        \"line\": \"12 MG Road\",\n        \"city\": \"Mysore\",\n        \"state\": \"Karnataka\",\n        \"pincode\": \"570001\"\n    },\n    \"items\": [\n        {\n            \"sku\": \"SKU-1001\",\n            \"quantity\": 1\n        }\n    ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -413,14 +413,50 @@
             "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{orderUrl}}/orders/11/cancel",
+              "raw": "{{orderUrl}}/orders/19/cancel",
               "host": [
                 "{{orderUrl}}"
               ],
               "path": [
                 "orders",
-                "11",
+                "19",
                 "cancel"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Circuit Breaker",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/actuator/circuitbreakers",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "circuitbreakers"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Retires",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{orderUrl}}/actuator/retries",
+              "host": [
+                "{{orderUrl}}"
+              ],
+              "path": [
+                "actuator",
+                "retries"
               ]
             }
           },
