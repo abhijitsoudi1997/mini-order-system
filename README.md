@@ -2,23 +2,26 @@
 
 A small order management system built with **Spring Boot microservices**, inspired by my experience with IBM Sterling Order Management (OMS). The goal is to rebuild the core order flow (products, stock, orders) as independent services that talk to each other.
 
-> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery, API Gateway, security and Docker are on the roadmap below.
+> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. API Gateway, security and Docker are on the roadmap below.
 
 ## Architecture
 
 ```
-                    +-----------------+
-   Client  -------> |   API Gateway   |   (planned)
- (Postman/browser)  +--------+--------+
-                             |
-              +--------------+--------------+
-              |                             |
-     +--------v--------+           +--------v--------+
-     | Inventory       | <-------- | Order           |
-     | Service (8081)  |  REST (OpenFeign)           |
-     +-----------------+  (OpenFeign) +--------------+
-                                    | Service (8082)  |
-                                    +-----------------+
+ Client (Postman/browser) --> [ API Gateway ]  (planned)
+                                     |
+               +---------------------+---------------------+
+               |                                           |
+    +----------v-----------+   inventory-service   +--------v-------------+
+    | Inventory Service    | <-------------------- | Order Service        |
+    | (8081)               |  OpenFeign + load     | (8082)               |
+    +----------+-----------+  balancer, by name    +--------+-------------+
+               | register / heartbeat                       | register / look up
+               +---------------------+----------------------+
+                                     v
+                            +------------------+
+                            | Eureka server    |
+                            | (8761)           |
+                            +------------------+
 ```
 
 | Service | Port | Status |
@@ -26,9 +29,9 @@ A small order management system built with **Spring Boot microservices**, inspir
 | inventory-service | 8081 | Done (product CRUD, MySQL, validation, tests, Swagger) |
 | order-service | 8082 | Done (orders, order lines, calls Inventory via OpenFeign, validation, tests) |
 | api-gateway | 8080 | Planned |
-| Eureka server (service discovery) | 8761 | Planned |
+| discovery-server (Eureka, service discovery) | 8761 | Done (registry and dashboard) |
 
-Each service owns its own database (`inventory_db`, `order_db`). Services call each other over REST and will be started together with Docker Compose.
+Each service owns its own database (`inventory_db`, `order_db`). Services find each other through Eureka and call each other over REST. Docker Compose is planned.
 
 ## Tech stack
 
@@ -168,7 +171,7 @@ Creates and reads orders. When an order is placed, the service calls the Invento
 
 ### How Order talks to Inventory
 
-`InventoryClient` (OpenFeign) calls `GET /products/sku/{sku}` for the name and price, then `POST /inventory/reserve` to hold the stock (and `POST /inventory/release` when an order is cancelled). The base URL is set in `application.properties` (`inventory.base-url=http://localhost:8081`). Timeouts: 2 s connect, 5 s read.
+`InventoryClient` (OpenFeign) calls `GET /products/sku/{sku}` for the name and price, then `POST /inventory/reserve` to hold the stock (and `POST /inventory/release` when an order is cancelled). Inventory is found by its **Eureka service name** `inventory-service` (there is no fixed URL), and Spring Cloud LoadBalancer picks one of the registered instances. Timeouts: 2 s connect, 5 s read.
 
 | Situation | Result |
 |---|---|
@@ -207,6 +210,28 @@ Circuit breaker: it looks at the last 10 calls, opens when at least 5 calls were
 
 State is visible at `/actuator/circuitbreakers`, `/actuator/retries` and `/actuator/health`. The settings live under `resilience4j.*` in `order-service/src/main/resources/application.properties`.
 
+## Service discovery (Eureka)
+
+The `discovery-server` project is a Eureka server (port 8761, dashboard at http://localhost:8761). Inventory and Order register with it at start-up under their `spring.application.name` and then send heartbeats. Order does not know where Inventory runs: it asks for `inventory-service`, and Spring Cloud LoadBalancer picks one of the registered instances (round robin). Several copies of Inventory can therefore run on different ports (for example with `-Dserver.port=8091`) and share the same database.
+
+The timers are shortened for local work so that changes show up within seconds. A real deployment would keep the defaults or tune them deliberately.
+
+| Setting | Local | Default |
+|---|---|---|
+| Heartbeat from each service | every 5 s | every 30 s |
+| Instance expires after missed heartbeats | 15 s | 90 s |
+| Server checks for expired instances | every 5 s | every 60 s |
+| Self-preservation mode (server) | off | on |
+| Order refreshes its copy of the registry | every 5 s | every 30 s |
+| LoadBalancer cache in Order | 5 s | 35 s |
+
+Failure behaviour:
+
+- **One of two Inventory instances crashes:** until it expires from the registry, Order may pick it and the call fails. The retry then goes to the other instance, so the order usually still succeeds.
+- **All Inventory instances are gone:** the load balancer has nobody to call, Order answers 503 and the circuit breaker opens after repeated failures. When Inventory registers again, orders work again.
+- **The Eureka server is stopped:** running services keep working, because each client keeps a local copy of the registry. They re-register when the server returns.
+- **A clean shutdown** deregisters the instance at once, while a hard kill leaves it in the registry until its lease expires.
+
 ## Run locally
 
 Requirements: Java 17 or newer and MySQL. Maven is not needed because each service includes the Maven Wrapper.
@@ -238,10 +263,14 @@ export ORDER_DB_PASSWORD='choose-another-password'  # order-service
 
 ### 3. Start the services
 
-Start **Inventory first** (port 8081), then Order (port 8082), each in its own terminal:
+Start the **Eureka server first** (port 8761), then Inventory (8081), then Order (8082), each in its own terminal. The Eureka dashboard at http://localhost:8761 shows both services once they have registered (up to about 40 seconds):
 
 ```
 git clone https://github.com/abhijitsoudi1997/mini-order-system.git
+cd mini-order-system/discovery-server
+./mvnw spring-boot:run
+```
+```
 cd mini-order-system/inventory-service
 ./mvnw spring-boot:run
 ```
@@ -277,7 +306,7 @@ cd order-service && ./mvnw test
 The tests do not need MySQL or a running Inventory Service. Integration tests run with the `test` profile against an in-memory H2 database, and the Order Service uses a stub product catalog in that profile.
 
 - Inventory Service: `ProductServiceTest` (Mockito), `ProductMapperTest`, `ProductApiTest` (MockMvc against the real controllers, validation and error handler), `ProductReservationTest` (atomic reserve and release against H2), `ReservationServiceTest` (idempotency rules), `StockApiTest` (reserve and release endpoints, all-or-nothing, repeat-safe)
-- Order Service: `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest` (Mockito, mocked stock reservation), `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (CONFIRMED and FAILED outcomes), `OrderCancelApiTest`, `InventoryProductCatalogTest` and `InventoryStockReservationTest` (Mockito, mocked Feign client), `ResilienceIntegrationTest` (retry and circuit breaker in a real Spring context with a mocked Feign client)
+- Order Service: `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest` (Mockito, mocked stock reservation), `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (CONFIRMED and FAILED outcomes), `OrderCancelApiTest`, `InventoryProductCatalogTest` and `InventoryStockReservationTest` (Mockito, mocked Feign client), `InventoryClientTest` (the client is found by service name, not a fixed URL), `ResilienceIntegrationTest` (retry and circuit breaker in a real Spring context with a mocked Feign client). The Eureka client is switched off in the test profiles, so no test needs a running registry
 
 ## End-to-end flow (Postman)
 
@@ -326,7 +355,8 @@ Failure behaviour (stopping or freezing Inventory, the circuit breaker opening a
 - [x] Stock reservation (reserve, release, confirm, cancel)
 - [x] Resilience4j (retry, circuit breaker) and idempotent reserve and release
 - [x] End-to-end flow documented and automated (Postman collection with tests)
-- [ ] Service discovery (Eureka), API Gateway
+- [x] Service discovery (Eureka) and lookup by service name
+- [ ] API Gateway
 - [ ] Security
 - [ ] Docker and Docker Compose
 
