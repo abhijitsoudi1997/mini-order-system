@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -91,6 +92,11 @@ public class GlobalExceptionHandler {
 	public ResponseEntity<ErrorResponse> handleInvalidOrderState(InvalidOrderStateException ex,
 			HttpServletRequest request) {
 		return build(HttpStatus.CONFLICT, ex.getMessage(), request, List.of());
+	}
+	
+	@ExceptionHandler(CallNotPermittedException.class)
+	public ResponseEntity<ErrorResponse> handleCircuitOpen(CallNotPermittedException ex, HttpServletRequest request) {
+		return build(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage(), request, List.of());
 	}
 
 	private ResponseEntity<ErrorResponse> build(HttpStatus status, String message, HttpServletRequest request,

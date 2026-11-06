@@ -13,6 +13,7 @@ import com.abhijit.order_service.order.StockItemRequest;
 import com.abhijit.order_service.order.StockRequest;
 
 import feign.FeignException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 @Component
 @Profile("!test")
@@ -27,6 +28,7 @@ public class InventoryStockReservation implements StockReservation{
 	}
 
 	@Override
+	@CircuitBreaker(name = "inventory")
 	public void reserve(String orderNumber, List<StockLine> lines) {
 		try {
 			inventoryClient.reserve(toRequest(orderNumber, lines));
@@ -38,6 +40,7 @@ public class InventoryStockReservation implements StockReservation{
 	}
 
 	@Override
+	@CircuitBreaker(name = "inventory")
 	public void release(String orderNumber, List<StockLine> lines) {
 		try {
 			inventoryClient.release(toRequest(orderNumber, lines));
