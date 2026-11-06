@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 import com.abhijit.order_service.order.StockRequest;
 
-@FeignClient(name = "inventory-service", url = "${inventory.base-url}")
+@FeignClient(name = "inventory-service")
 public interface InventoryClient {
 	
 	@GetMapping("/products/sku/{sku}")
