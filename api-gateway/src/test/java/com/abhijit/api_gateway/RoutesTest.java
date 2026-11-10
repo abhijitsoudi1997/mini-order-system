@@ -34,8 +34,16 @@ class RoutesTest {
     }
 
     @Test
-    void exactlyTwoRoutesAreDefined() {
-        assertThat(routes()).hasSize(2);
+    void exactlyThreeRoutesAreDefined() {
+        assertThat(routes()).hasSize(3);
+    }
+
+    @Test
+    void loginGoesToOrderServiceAndNothingElseUnderAuth() {
+        Route r = route("order-auth");
+        assertThat(r.getUri().toString()).isEqualTo("lb://order-service");
+        assertThat(matches(r, "/api/auth/login")).isTrue();
+        assertThat(matches(r, "/api/auth/anything-else")).isFalse();
     }
 
     @Test
