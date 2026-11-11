@@ -20,6 +20,15 @@ services:
       retries: 20
       start_period: 20s
 
+  zipkin:
+    image: openzipkin/zipkin
+    restart: on-failure
+    mem_limit: 512m
+    environment:
+      JAVA_OPTS: "-Xms128m -Xmx256m"
+    ports:
+      - "9411:9411"
+
   eureka:
     build: ./discovery-server
     image: discovery-server:1.0
@@ -55,6 +64,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
       EUREKA_INSTANCE_HOSTNAME: inventory-service
+      MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     volumes:
       - ./docker/healthcheck.sh:/healthcheck.sh:ro
     healthcheck:
@@ -86,6 +96,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
       EUREKA_INSTANCE_HOSTNAME: order-service
+      MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     volumes:
       - ./docker/healthcheck.sh:/healthcheck.sh:ro
     healthcheck:
@@ -109,6 +120,7 @@ services:
       JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=50"
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka:8761/eureka/
       EUREKA_INSTANCE_HOSTNAME: api-gateway
+      MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
     volumes:
       - ./docker/healthcheck.sh:/healthcheck.sh:ro
     healthcheck:

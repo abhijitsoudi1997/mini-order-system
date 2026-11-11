@@ -10,6 +10,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import com.abhijit.order_service.catalog.StockReservation;
+
+import io.micrometer.observation.annotation.Observed;
+
 import com.abhijit.order_service.catalog.InventoryStockReservation;
 import com.abhijit.order_service.catalog.ProductCatalog;
 import com.abhijit.order_service.catalog.ProductInfo;
@@ -53,6 +56,8 @@ public class OrderService {
 	    return orderRepository.findByCustomerEmailIgnoreCase(customerEmail, pageable).map(mapper::toResponse);
 	}
 	
+	@Observed(name = "order.create", contextualName = "create-order",
+            lowCardinalityKeyValues = {"flow", "order-placement"})
 	@Transactional
 	public OrderResponse createOrder(CreateOrderRequest request) {
 		Order order = mapper.toEntity(request);

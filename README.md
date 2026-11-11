@@ -2,7 +2,7 @@
 
 A small order management system built with **Spring Boot microservices**, inspired by my experience with IBM Sterling Order Management (OMS). The goal is to rebuild the core order flow (products, stock, orders) as independent services that talk to each other.
 
-> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. An API Gateway is the single entry point for clients, and the Order Service is protected with JWT login and roles. Every service has a Docker image, and Docker Compose starts the whole system (MySQL included) with one command.
+> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. An API Gateway is the single entry point for clients, and the Order Service is protected with JWT login and roles. Every service has a Docker image, and Docker Compose starts the whole system (MySQL and Zipkin included) with one command. Distributed tracing with Zipkin shows one request across the gateway, Order and Inventory.
 
 ## Architecture
 
@@ -35,6 +35,7 @@ A small order management system built with **Spring Boot microservices**, inspir
 | order-service | 8082 | Done (orders, order lines, calls Inventory via OpenFeign, JWT security with USER and ADMIN roles, validation, tests) |
 | api-gateway | 8080 | Done (routes by service name, Location rewrite, correlation id, timeouts, tests) |
 | discovery-server (Eureka, service discovery) | 8761 | Done (registry and dashboard) |
+| zipkin (tracing UI, Docker image) | 9411 | Done (collects spans from the three services) |
 
 Each service owns its own database (`inventory_db`, `order_db`). Services find each other through Eureka and call each other over REST. Clients use the gateway. Docker Compose runs the whole system.
 
@@ -51,6 +52,7 @@ Each service owns its own database (`inventory_db`, `order_db`). Services find e
 - Spring Cloud Netflix Eureka (service discovery) and Spring Cloud Gateway (reactive, WebFlux)
 - Spring Security with JWT (OAuth2 resource server, HS256)
 - Docker (multi-stage images, non-root user) and Docker Compose
+- Micrometer Tracing (Brave) with Zipkin, `@Observed` for custom spans and metrics
 
 ## Inventory Service
 
@@ -334,13 +336,13 @@ Inside a container, `localhost` means the container itself. Containers therefore
 
 ### Docker Compose
 
-`docker-compose.yml` in the project root describes the whole system: MySQL, Eureka, Inventory, Order and the gateway. Compose creates the network and the volume, builds the images, and starts everything in the right order.
+`docker-compose.yml` in the project root describes the whole system: MySQL, Zipkin, Eureka, Inventory, Order and the gateway. Compose creates the network and the volume, builds the images, and starts everything in the right order.
 
 Files:
 
 | File | Purpose |
 |---|---|
-| `docker-compose.yml` | the five services |
+| `docker-compose.yml` | the six services |
 | `.env.example` | template for the secrets file. Copy it to `.env` and fill in the values. **`.env` is ignored by Git and must never be committed** |
 | `docker/mysql-init/01-create-databases.sh` | creates `inventory_db`, `order_db` and their users the first time the MySQL volume is created |
 | `docker/healthcheck.sh` | small script used by the health checks (the images have no `curl`) |
@@ -364,6 +366,7 @@ docker compose down -v      # also deletes the database volume (fresh start)
 | inventory-service | 8081 | also reachable directly, for the Postman flow |
 | order-service | 8082 | also reachable directly |
 | mysql | 3307 | for MySQL Workbench (3307 avoids a clash with a local MySQL) |
+| zipkin | 9411 | tracing UI |
 
 How it fits together:
 
@@ -376,6 +379,19 @@ How it fits together:
 - **Two Inventory instances (load balancing demo):**
   `docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale inventory-service=2`
   Eureka then lists two instances and the gateway alternates between them. Return to one with `docker compose up -d`.
+
+## Observability (distributed tracing)
+
+One request through the gateway touches up to three services. Tracing links the pieces together under one **trace id**, so a slow or failing request can be followed from service to service.
+
+- **Terms:** a *trace* is one request end to end. A *span* is one step inside it (a service handling the request, an outgoing call). Every log line carries `[traceId-spanId]`.
+- **Dependencies:** `spring-boot-starter-zipkin` in the gateway, Order and Inventory. Order also has `feign-micrometer` (the trace id travels on Feign calls) and the gateway has `context-propagation` with `spring.reactor.context-propagation=auto` (it is reactive, so the id must follow the request across threads).
+- **Zipkin** runs as a container (`openzipkin/zipkin`, UI on http://localhost:9411). The services send spans to `MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT=http://zipkin:9411/api/v2/spans`. Zipkin keeps spans in memory only, so a restart clears them.
+- **Sampling:** `management.tracing.sampling.probability=${TRACING_SAMPLING:1.0}`. 1.0 traces every request (fine for development). In production, use a lower value such as 0.1, because tracing every request costs CPU, network and storage.
+- **Custom span:** `OrderService.createOrder` is annotated with `@Observed(name = "order.create", contextualName = "create-order")`. One annotation gives a span in Zipkin (what the request was doing) and a timer at `/actuator/metrics/order.create` (how often and how long). It needs the `ObservedAspect` bean in `ObservationConfig`.
+- **Tests (`TracingTest`):** a Tracer exists, a new span has trace and span ids, and the trace id reaches the logging context. The tests set the sampling probability to 0 so they do not try to reach Zipkin.
+
+Try it: log in, place an order through the gateway, open Zipkin and click *Run Query*. The trace shows `api-gateway`, `order-service` (with the `create-order` span) and `inventory-service`. The *Dependencies* tab draws the call graph.
 
 ## Run locally
 
@@ -462,9 +478,9 @@ cd api-gateway && ./mvnw test
 
 The tests do not need MySQL, Eureka or a running service. Integration tests run with the `test` profile against an in-memory H2 database, and the Order Service uses a stub product catalog in that profile.
 
-- Inventory Service: `ProductServiceTest` (Mockito), `ProductMapperTest`, `ProductApiTest` (MockMvc against the real controllers, validation and error handler), `ProductReservationTest` (atomic reserve and release against H2), `ReservationServiceTest` (idempotency rules), `StockApiTest` (reserve and release endpoints, all-or-nothing, repeat-safe)
-- Order Service: `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest` (Mockito, mocked stock reservation), `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (CONFIRMED and FAILED outcomes), `OrderCancelApiTest`, `InventoryProductCatalogTest` and `InventoryStockReservationTest` (Mockito, mocked Feign client), `InventoryClientTest` (the client is found by service name, not a fixed URL), `ResilienceIntegrationTest` (retry and circuit breaker in a real Spring context with a mocked Feign client), `TokenServiceTest` (token contents and expiry, short secrets rejected) and `SecurityApiTest` (login, 401 for missing, expired, tampered, foreign-key and Basic credentials, 403 for a customer cancelling or a token without roles, admin allowed). The Eureka client is switched off in the test profiles, so no test needs a running registry
-- API Gateway: `CorrelationIdFilterTest` (id generated, kept, replaced when invalid or too long, runs first) and `RoutesTest` (exactly three routes, each goes to the right service name, only `/api/auth/login` is open under `/auth`, internal and unprefixed paths match no route)
+- Inventory Service: `ProductServiceTest` (Mockito), `ProductMapperTest`, `ProductApiTest` (MockMvc against the real controllers, validation and error handler), `ProductReservationTest` (atomic reserve and release against H2), `ReservationServiceTest` (idempotency rules), `StockApiTest` (reserve and release endpoints, all-or-nothing, repeat-safe), `TracingTest`
+- Order Service: `OrderTest`, `OrderNumberGeneratorTest`, `OrderMapperTest`, `OrderServiceTest` (Mockito, mocked stock reservation), `OrderPersistenceTest`, `OrderApiTest`, `OrderStockApiTest` (CONFIRMED and FAILED outcomes), `OrderCancelApiTest`, `InventoryProductCatalogTest` and `InventoryStockReservationTest` (Mockito, mocked Feign client), `InventoryClientTest` (the client is found by service name, not a fixed URL), `TracingTest` (tracer, span ids, log context), `ResilienceIntegrationTest` (retry and circuit breaker in a real Spring context with a mocked Feign client), `TokenServiceTest` (token contents and expiry, short secrets rejected) and `SecurityApiTest` (login, 401 for missing, expired, tampered, foreign-key and Basic credentials, 403 for a customer cancelling or a token without roles, admin allowed). The Eureka client is switched off in the test profiles, so no test needs a running registry
+- API Gateway: `CorrelationIdFilterTest` (id generated, kept, replaced when invalid or too long, runs first) `RoutesTest` (exactly three routes, each goes to the right service name, only `/api/auth/login` is open under `/auth`, internal and unprefixed paths match no route) and a Tracer test in `ApiGatewayApplicationTests`
 
 ## End-to-end flow (Postman)
 
@@ -521,6 +537,7 @@ Failure behaviour (stopping or freezing Inventory, the circuit breaker opening a
 - [x] Security (JWT login, roles USER and ADMIN, 401 and 403)
 - [x] Docker images (multi-stage, non-root, configured with environment variables)
 - [x] Docker Compose (one command for MySQL, Eureka, Inventory, Order and the gateway; health checks, memory limits)
+- [x] Distributed tracing (Zipkin, trace ids in logs, custom `create-order` span, sampling)
 
 ## Author
 

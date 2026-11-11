@@ -14,7 +14,10 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 
 import reactor.core.publisher.Mono;
 
-@SpringBootTest(properties = {"eureka.client.enabled=false", "spring.cloud.discovery.enabled=false"})
+@SpringBootTest(properties = {
+        "eureka.client.enabled=false",
+        "spring.cloud.discovery.enabled=false",
+        "management.tracing.sampling.probability=0.0"})
 class RoutesTest {
 
     @Autowired
