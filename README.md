@@ -2,7 +2,7 @@
 
 A small order management system built with **Spring Boot microservices**, inspired by my experience with IBM Sterling Order Management (OMS). The goal is to rebuild the core order flow (products, stock, orders) as independent services that talk to each other.
 
-> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. An API Gateway is the single entry point for clients, and the Order Service is protected with JWT login and roles. Docker is on the roadmap below.
+> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. An API Gateway is the single entry point for clients, and the Order Service is protected with JWT login and roles. Every service has a Docker image. Docker Compose is on the roadmap below.
 
 ## Architecture
 
@@ -50,7 +50,8 @@ Each service owns its own database (`inventory_db`, `order_db`). Services find e
 - Resilience4j (retry and circuit breaker)
 - Spring Cloud Netflix Eureka (service discovery) and Spring Cloud Gateway (reactive, WebFlux)
 - Spring Security with JWT (OAuth2 resource server, HS256)
-- Planned: Docker and Docker Compose
+- Docker (multi-stage images, non-root user)
+- Planned: Docker Compose
 
 ## Inventory Service
 
@@ -302,6 +303,36 @@ Design notes and limits:
 - The Inventory Service has no authentication yet. It is meant to be reachable only inside the private network (Docker comes next). Until then, port 8081 is open on a developer machine.
 - CSRF protection is off because there are no cookies or browser sessions.
 
+## Docker
+
+Each service (`discovery-server`, `inventory-service`, `order-service`, `api-gateway`) has a **multi-stage `Dockerfile`** and a `.dockerignore` in its folder.
+
+- **Stage 1 (build):** `eclipse-temurin:17-jdk` runs the Maven wrapper and builds the jar (tests are skipped in the image build and run separately with `./mvnw test`). Maven's download cache is reused between builds.
+- **Stage 2 (run):** `eclipse-temurin:17-jre` receives only the jar. The image contains no source code, no Maven and no compiler, and the application runs as a normal user, not as root.
+
+Build all four images (needs only Docker, not Java or Maven):
+
+```
+cd discovery-server  && docker build -t discovery-server:1.0 .  && cd ..
+cd inventory-service && docker build -t inventory-service:1.0 . && cd ..
+cd order-service     && docker build -t order-service:1.0 .     && cd ..
+cd api-gateway       && docker build -t api-gateway:1.0 .       && cd ..
+```
+
+### Configuration with environment variables
+
+Nothing secret or environment-specific is inside an image. The same image runs anywhere, and settings are passed when the container starts. Spring Boot turns an environment variable into a property (uppercase, dots and dashes become underscores) and it overrides the value in `application.properties`.
+
+| Variable | Used by | Purpose |
+|---|---|---|
+| `SPRING_DATASOURCE_URL` | inventory, order | JDBC URL, for example `jdbc:mysql://mysql:3306/inventory_db` |
+| `DB_PASSWORD` / `ORDER_DB_PASSWORD` | inventory / order | database passwords |
+| `EUREKA_CLIENT_SERVICEURL_DEFAULTZONE` | inventory, order, gateway | Eureka address, for example `http://eureka:8761/eureka/` |
+| `EUREKA_INSTANCE_HOSTNAME` | inventory, order, gateway | the name the service registers under (its container name) |
+| `ORDER_USER_PASSWORD`, `ORDER_ADMIN_PASSWORD`, `JWT_SECRET` | order | login passwords and token signing key |
+
+Inside a container, `localhost` means the container itself. Containers therefore reach each other **by container name on a shared Docker network** (for example `mysql`, `eureka`, `inventory-service`), and the local value `eureka.instance.hostname=localhost` in the properties files is replaced through `EUREKA_INSTANCE_HOSTNAME`. Docker Compose will start the whole system in one command.
+
 ## Run locally
 
 Requirements: Java 17 or newer and MySQL. Maven is not needed because each service includes the Maven Wrapper.
@@ -442,7 +473,8 @@ Failure behaviour (stopping or freezing Inventory, the circuit breaker opening a
 - [x] Service discovery (Eureka) and lookup by service name
 - [x] API Gateway (routes by service name, Location rewrite, correlation id, timeouts)
 - [x] Security (JWT login, roles USER and ADMIN, 401 and 403)
-- [ ] Docker and Docker Compose
+- [x] Docker images (multi-stage, non-root, configured with environment variables)
+- [ ] Docker Compose (one command for MySQL and all services)
 
 ## Author
 
