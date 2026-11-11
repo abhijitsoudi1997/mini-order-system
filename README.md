@@ -2,7 +2,7 @@
 
 A small order management system built with **Spring Boot microservices**, inspired by my experience with IBM Sterling Order Management (OMS). The goal is to rebuild the core order flow (products, stock, orders) as independent services that talk to each other.
 
-> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. An API Gateway is the single entry point for clients, and the Order Service is protected with JWT login and roles. Every service has a Docker image. Docker Compose is on the roadmap below.
+> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. An API Gateway is the single entry point for clients, and the Order Service is protected with JWT login and roles. Every service has a Docker image, and Docker Compose starts the whole system (MySQL included) with one command.
 
 ## Architecture
 
@@ -36,7 +36,7 @@ A small order management system built with **Spring Boot microservices**, inspir
 | api-gateway | 8080 | Done (routes by service name, Location rewrite, correlation id, timeouts, tests) |
 | discovery-server (Eureka, service discovery) | 8761 | Done (registry and dashboard) |
 
-Each service owns its own database (`inventory_db`, `order_db`). Services find each other through Eureka and call each other over REST. Clients use the gateway. Docker Compose is planned.
+Each service owns its own database (`inventory_db`, `order_db`). Services find each other through Eureka and call each other over REST. Clients use the gateway. Docker Compose runs the whole system.
 
 ## Tech stack
 
@@ -50,8 +50,7 @@ Each service owns its own database (`inventory_db`, `order_db`). Services find e
 - Resilience4j (retry and circuit breaker)
 - Spring Cloud Netflix Eureka (service discovery) and Spring Cloud Gateway (reactive, WebFlux)
 - Spring Security with JWT (OAuth2 resource server, HS256)
-- Docker (multi-stage images, non-root user)
-- Planned: Docker Compose
+- Docker (multi-stage images, non-root user) and Docker Compose
 
 ## Inventory Service
 
@@ -331,9 +330,56 @@ Nothing secret or environment-specific is inside an image. The same image runs a
 | `EUREKA_INSTANCE_HOSTNAME` | inventory, order, gateway | the name the service registers under (its container name) |
 | `ORDER_USER_PASSWORD`, `ORDER_ADMIN_PASSWORD`, `JWT_SECRET` | order | login passwords and token signing key |
 
-Inside a container, `localhost` means the container itself. Containers therefore reach each other **by container name on a shared Docker network** (for example `mysql`, `eureka`, `inventory-service`), and the local value `eureka.instance.hostname=localhost` in the properties files is replaced through `EUREKA_INSTANCE_HOSTNAME`. Docker Compose will start the whole system in one command.
+Inside a container, `localhost` means the container itself. Containers therefore reach each other **by container name on a shared Docker network** (for example `mysql`, `eureka`, `inventory-service`), and the local value `eureka.instance.hostname=localhost` in the properties files is replaced through `EUREKA_INSTANCE_HOSTNAME`. Docker Compose (next section) starts the whole system in one command.
+
+### Docker Compose
+
+`docker-compose.yml` in the project root describes the whole system: MySQL, Eureka, Inventory, Order and the gateway. Compose creates the network and the volume, builds the images, and starts everything in the right order.
+
+Files:
+
+| File | Purpose |
+|---|---|
+| `docker-compose.yml` | the five services |
+| `.env.example` | template for the secrets file. Copy it to `.env` and fill in the values. **`.env` is ignored by Git and must never be committed** |
+| `docker/mysql-init/01-create-databases.sh` | creates `inventory_db`, `order_db` and their users the first time the MySQL volume is created |
+| `docker/healthcheck.sh` | small script used by the health checks (the images have no `curl`) |
+| `docker-compose.scale.yml` | demo override for running several Inventory instances |
+
+Start, check and stop:
+
+```
+cp .env.example .env        # then edit .env and set real values (JWT_SECRET: openssl rand -hex 32)
+docker compose up -d --build
+docker compose ps           # wait until every service is (healthy)
+docker compose logs -f order-service
+docker compose down         # stops everything, keeps the database volume
+docker compose down -v      # also deletes the database volume (fresh start)
+```
+
+| Service | Port on the Mac | Notes |
+|---|---|---|
+| api-gateway | 8080 | the entry point for clients |
+| eureka | 8761 | dashboard |
+| inventory-service | 8081 | also reachable directly, for the Postman flow |
+| order-service | 8082 | also reachable directly |
+| mysql | 3307 | for MySQL Workbench (3307 avoids a clash with a local MySQL) |
+
+How it fits together:
+
+- **Start order:** MySQL and Eureka must be `healthy` before Inventory and Order start (`depends_on` with `condition: service_healthy`). Health checks call `/actuator/health` (a 200 means UP).
+- **Names, not IPs:** services reach each other by service name on the Compose network (`mysql`, `eureka`). Each registers in Eureka under its own service name (`EUREKA_INSTANCE_HOSTNAME`).
+- **Secrets:** all passwords and the JWT key come from `.env`. A missing value stops Compose immediately with a clear message.
+- **Memory:** each container has a limit (`mem_limit`) and Java is told to use half of it for the heap (`-XX:MaxRAMPercentage=50`). Check with `docker stats`.
+- **Restart:** a service that crashes is restarted (`restart: on-failure`). One that is stopped on purpose stays stopped.
+- **Database setup runs only once.** The init script runs when the MySQL volume is empty. Changing it, or a password in `.env`, has no effect on an existing volume: use `docker compose down -v` to start fresh (this deletes the data).
+- **Two Inventory instances (load balancing demo):**
+  `docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale inventory-service=2`
+  Eureka then lists two instances and the gateway alternates between them. Return to one with `docker compose up -d`.
 
 ## Run locally
+
+**Easiest:** use Docker Compose (see "Docker Compose" above). It needs only Docker. The rest of this section runs the services directly with Java, which is useful when working on the code in an IDE.
 
 Requirements: Java 17 or newer and MySQL. Maven is not needed because each service includes the Maven Wrapper.
 
@@ -430,7 +476,7 @@ Two collections live in `docs/postman/`:
 | `e2e-flow.postman_collection.json` | An automated end-to-end flow directly against the services, with checks on every request (33 requests) |
 | `e2e-gateway.postman_collection.json` | The same flow through the API gateway (35 requests): public calls use `http://localhost:8080/api/...`, and it also checks that internal endpoints are not exposed that `Location` is a public path, and the same security checks |
 
-Start MySQL, then Eureka, Inventory (8081) and Order (8082) (and the gateway on 8080 for the gateway collection), then in Postman choose **Import** and select `e2e-flow.postman_collection.json`. The collections log in first, so open the collection's **Variables** tab and type the two login passwords (the values you set as `ORDER_USER_PASSWORD` and `ORDER_ADMIN_PASSWORD`) into `customerPassword` and `adminPassword` as **Current value** (they are empty in the file and must never be committed). Then press **Run**. Or from a terminal (needs Node.js):
+Start the system (`docker compose up -d`, or MySQL, Eureka, Inventory (8081), Order (8082) and the gateway (8080) by hand), then in Postman choose **Import** and select `e2e-flow.postman_collection.json`. The collections log in first, so open the collection's **Variables** tab and type the two login passwords (the values you set as `ORDER_USER_PASSWORD` and `ORDER_ADMIN_PASSWORD`) into `customerPassword` and `adminPassword` as **Current value** (they are empty in the file and must never be committed). Then press **Run**. Or from a terminal (needs Node.js):
 
 ```
 npx newman run docs/postman/e2e-flow.postman_collection.json --env-var "customerPassword=..." --env-var "adminPassword=..."
@@ -474,7 +520,7 @@ Failure behaviour (stopping or freezing Inventory, the circuit breaker opening a
 - [x] API Gateway (routes by service name, Location rewrite, correlation id, timeouts)
 - [x] Security (JWT login, roles USER and ADMIN, 401 and 403)
 - [x] Docker images (multi-stage, non-root, configured with environment variables)
-- [ ] Docker Compose (one command for MySQL and all services)
+- [x] Docker Compose (one command for MySQL, Eureka, Inventory, Order and the gateway; health checks, memory limits)
 
 ## Author
 

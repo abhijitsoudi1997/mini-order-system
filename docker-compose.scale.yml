@@ -1,0 +1,9 @@
+# Demo only: run several Inventory instances.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.scale.yml up -d --scale inventory-service=2
+services:
+  inventory-service:
+    ports: !reset []
+    environment:
+      EUREKA_INSTANCE_PREFER_IP_ADDRESS: "true"
+      EUREKA_INSTANCE_INSTANCEID: inventory-service:$${HOSTNAME}
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB: DEBUG
