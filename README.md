@@ -2,31 +2,29 @@
 
 A small order management system built with **Spring Boot microservices**, inspired by my experience with IBM Sterling Order Management (OMS). The goal is to rebuild the core order flow (products, stock, orders) as independent services that talk to each other.
 
-> **Status: work in progress.** The Inventory Service and Order Service are complete and talk to each other over REST (OpenFeign), including idempotent stock reservation, retries and a circuit breaker. Service discovery with Eureka is in place and Order finds Inventory by service name. An API Gateway is the single entry point for clients, and the Order Service is protected with JWT login and roles. Every service has a Docker image, and Docker Compose starts the whole system (MySQL and Zipkin included) with one command. Distributed tracing with Zipkin shows one request across the gateway, Order and Inventory.
+> **Status: the planned scope is complete.** Two Spring Boot services (Inventory and Order) talk over REST with OpenFeign, with idempotent stock reservation, retries and a circuit breaker. Eureka provides service discovery, an API Gateway is the single entry point, and the Order Service is protected with JWT login and roles. Every service has a Docker image, Docker Compose starts the whole system (MySQL and Zipkin included) with one command, and distributed tracing shows one request across all three services. Possible next steps: asynchronous events (messaging) and a CI pipeline.
 
 ## Architecture
 
 ```
- Client (Postman/browser)
-          |  http://localhost:8080/api/...
+ Client (Postman / browser)
+          |  http://localhost:8080/api/...   (JWT in the Authorization header)
           v
- +----------------------+
- | API Gateway (8080)   |  routes by service name (lb://...)
- +-----+-----------+----+
-       |           |
-       | /api/products/**         /api/orders/**
-       v                               v
-    +----------------------+   inventory-service   +----------------------+
-    | Inventory Service    | <-------------------- | Order Service        |
-    | (8081)               |  OpenFeign + load     | (8082)               |
-    +----------+-----------+  balancer, by name    +--------+-------------+
-               | register / heartbeat                       | register / look up
-               +---------------------+----------------------+
-                                     v
-                            +------------------+
-                            | Eureka server    |  (the gateway registers and
-                            | (8761)           |   looks up services here too)
-                            +------------------+
+ +---------------------------+
+ | API Gateway (8080)        |  routes by service name (lb://...), correlation id, timeouts
+ +------+-------------+------+
+        |             |
+        | /api/products/**         /api/orders/**, /api/auth/login
+        v                                  v
+ +--------------------+   inventory-service   +---------------------+
+ | Inventory Service  | <-------------------- | Order Service       |
+ | (8081)             |  OpenFeign, retry,    | (8082)              |
+ +---------+----------+  circuit breaker      +----------+----------+
+           |                                              |
+           v                                              v
+      inventory_db                                    order_db        (MySQL, one database per service)
+
+ All three services register with Eureka (8761) and send trace spans to Zipkin (9411).
 ```
 
 | Service | Port | Status |
